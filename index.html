@@ -1,0 +1,1798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MAESTRO — Conduct or Be Conducted</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:#050308; overflow:hidden; font-family: Georgia, 'Times New Roman', serif; color:#e8dcc8; }
+  #stage { position:fixed; inset:0; }
+  canvas { display:block; width:100%; height:100%; }
+  #overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center; text-align:center; background:radial-gradient(ellipse at 50% 40%, rgba(20,8,4,.88), rgba(3,2,6,.97)); z-index:10; padding:24px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  h1 { font-size: clamp(42px, 9vw, 96px); letter-spacing:.18em; color:#f4c960; text-shadow: 0 0 30px rgba(244,180,60,.55), 0 4px 0 #6b3a12; font-weight: normal; }
+  .sub { margin-top:8px; font-size:clamp(14px,2.4vw,20px); letter-spacing:.35em; color:#b89b6a; text-transform:uppercase; }
+  .rule { margin-top:26px; max-width:620px; font-size:clamp(13px,2.2vw,17px); line-height:1.75; color:#cfc2ab; }
+  .rule b { color:#f4c960; }
+  #startBtn { margin-top:30px; font:inherit; font-size:clamp(16px,2.6vw,22px); letter-spacing:.22em; padding:16px 44px; background:linear-gradient(#3a2210,#241304); color:#f4c960; border:1px solid #a67c2e; border-radius:4px; cursor:pointer; box-shadow:0 0 24px rgba(244,180,60,.25); }
+  #startBtn:hover { background:linear-gradient(#4a2e14,#2c1a06); box-shadow:0 0 34px rgba(244,180,60,.5); }
+  .mode { margin-top:18px; font-size:13px; color:#8d7a5c; letter-spacing:.15em; }
+  #calBtn { margin-top:14px; font:inherit; font-size:13px; letter-spacing:.22em; padding:10px 26px; background:transparent; color:#b89b6a; border:1px solid #6b5535; border-radius:4px; cursor:pointer; }
+  .tbtn { font:inherit; font-size:15px; letter-spacing:.18em; padding:12px 24px; background:transparent; color:#b89b6a; border:1px solid #6b5535; border-radius:4px; cursor:pointer; margin:0 6px; }
+  .tbtn.sel { color:#f4c960; border-color:#a67c2e; box-shadow:0 0 14px rgba(244,180,60,.3); }
+  .warn { color:#e08050; font-size:13px; margin-top:14px; max-width:520px; line-height:1.5; display:none; }
+  #hud { position:fixed; top:14px; left:16px; z-index:5; font-size:15px; letter-spacing:.08em; line-height:1.5; text-shadow:0 1px 3px #000; }
+  #hud b { color:#f4c960; }
+  #right { position:fixed; top:14px; right:16px; z-index:5; text-align:right; font-size:14px; line-height:1.6; text-shadow:0 1px 3px #000; }
+  #combo { color:#f4c960; font-size:22px; font-weight:bold; }
+  .flash { position:fixed; left:50%; top:38%; transform:translate(-50%,-50%); font-size:clamp(26px,5vw,44px); letter-spacing:.2em; z-index:6; opacity:0; pointer-events:none; text-shadow:0 0 22px rgba(244,180,60,.6); }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="trainUI" style="display:none; position:fixed; top:12px; left:0; right:0; z-index:5; pointer-events:none;">
+  <button id="tMenu" class="tbtn" style="position:absolute; left:14px; top:0; pointer-events:auto;">◂ MENU</button>
+  <button id="tSkip" class="tbtn" style="position:absolute; right:14px; top:0; pointer-events:auto;">SKIP ▸</button>
+</div>
+<div id="hud"></div>
+<div id="right"><div id="combo"></div><div id="status" style="color:#b89b6a"></div></div>
+<div class="flash" id="flash"></div>
+<div id="overlay">
+  <h1>MAESTRO</h1>
+  <div class="sub">Conduct or be conducted</div>
+  <div class="rule">
+    Conduct <b>Beethoven's Fifth</b> like the real Maestro — two hands, two jobs.<br>
+    <b>RIGHT HAND = BATON</b>: stroke DOWN as each orb lands on the beat line.<br>
+    Strong, sharp strokes on <b>ACCENT</b> (downbeat) notes.<br><br>
+    <b>LEFT HAND = EXPRESSION</b>:<br>
+    ▸ <b>POINT</b> at a dark section to cue them in (they wait for you)<br>
+    ▸ <b>RAISE / LOWER</b> palm = live dynamics (forte / piano)<br>
+    ▸ <b>FERMATA</b>: hold palm open through the long note, then <b>DROP + FIST</b> to cut it<br>
+    ▸ Open palm on <b>CYMBAL</b> circles = crash<br><br>
+    Solo hand still conducts — uncued sections join on their own. Miss notes and the hall... notices.
+  </div>
+  <div class="mode">Webcam + hand tracking (Chrome/Android recommended) — falls back to SPACE / tap if no camera</div>
+  <div class="warn" id="warn"></div>
+  <button id="startBtn">STEP TO THE PODIUM</button><br>
+  <button id="camRetryBtn" style="display:none;position:fixed;bottom:64px;left:50%;transform:translateX(-50%);z-index:60;background:#c0563a;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-family:Georgia,serif;font-size:14px;cursor:pointer">RETRY CAMERA</button>
+<div id="logwrap" style="display:none;position:fixed;left:0;right:0;bottom:0;height:60px;z-index:80;background:rgba(0,0,0,.92);border-top:2px solid #f4c960;transition:height .15s">
+  <div id="loghead" style="padding:6px 10px;display:flex;gap:8px;align-items:center;cursor:pointer">
+    <b style="color:#f4c960;font-size:13px;font-family:monospace">PIPELINE LOG <span id="logChev" style="font-size:10px">▲ tap to expand</span></b>
+    <button id="logCopy" style="background:#3a2210;color:#f4c960;border:1px solid #a67c2e;border-radius:4px;padding:5px 14px;font-size:13px;cursor:pointer;font-family:monospace">COPY LOG</button>
+    <span style="color:#8d7a5c;font-size:12px;font-family:monospace">play until freeze → COPY → paste to Jarvis</span>
+  </div>
+  <pre id="logpane" style="height:calc(100% - 36px);margin:0;padding:6px 10px;overflow:auto;color:#9fd66a;font-family:monospace;font-size:11px;line-height:1.45;white-space:pre-wrap"></pre>
+</div>
+  <div style="margin-top:16px">
+    <button class="tbtn sel" id="t72">APPRENTICE ♩=72</button>
+    <button class="tbtn" id="t108">MAESTRO ♩=108</button>
+  </div><br>
+  <button id="calBtn">CALIBRATE SWING</button><br>
+  <button id="trainBtn">MASTER CLASS — TRAINING</button>
+  <div class="mode" id="trainProg" style="display:none"></div>
+  <div class="mode" id="learnLine" style="display:none"></div>
+</div>
+
+<script type="module">
+import { HandLandmarker, FilesetResolver } from "https://jarvis-4ab907e4.base44.app/functions/maestroAsset?u=https%3A%2F%2Fcdn.jsdelivr.net%2Fnpm%2F%40mediapipe%2Ftasks-vision%400.10.14";
+
+/* ───────────────────────── globals ───────────────────────── */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const DPR = Math.min((typeof devicePixelRatio!=='undefined'? devicePixelRatio : 1)||1, 1.25);   // cap: phones render 3x and crawl
+let W, H, bgCache = null;
+function buildBgCache(){
+  bgCache = document.createElement('canvas'); bgCache.width = W; bgCache.height = H;
+  const c = bgCache.getContext('2d');
+  const bg = c.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#12070a'); bg.addColorStop(.6,'#0a0508'); bg.addColorStop(1,'#040206');
+  c.fillStyle=bg; c.fillRect(0,0,W,H);
+  const vg = c.createRadialGradient(W/2,H*.45,H*.25,W/2,H*.5,H*.8);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.75)');
+  c.fillStyle=vg; c.fillRect(0,0,W,H);
+  c.fillStyle='rgba(14,7,4,.95)'; c.fillRect(0,H*.86,W,H*.14);   // podium
+}
+function resize(){ W = cv.width = innerWidth * DPR; H = cv.height = innerHeight * DPR; buildBgCache(); } resize(); addEventListener('resize', resize);
+
+const STATE = { IDLE:0, PLAY:1, END:2, TRAIN:4 }; let state = STATE.IDLE;
+let DBG = {};                                  // diagnostics (stages/frames/inference) — used across modes
+/* ── FULL PIPELINE LOGGER — ring buffer + on-screen panel (?log=1). Every subsystem event lands here;
+   COPY button exports the exact timeline so freezes get debugged from data, not symptom reports. ── */
+const DBGLOG = { buf: [], t0: performance.now(), lastHandsN: -1, skipN: 0, fpsT: performance.now(), fpsC: 0 };
+function dlog(m){
+  try{
+    DBGLOG.buf.push(((performance.now()-DBGLOG.t0)/1000).toFixed(2).padStart(7,' ') + 's  ' + m);
+    if(DBGLOG.buf.length > 400) DBGLOG.buf.shift();
+    const el = document.getElementById('logpane');
+    if(el && el.style.display !== 'none'){
+      el.textContent = DBGLOG.buf.join('\n');
+      el.scrollTop = el.scrollHeight;
+    }
+  }catch(e){}
+}
+/* ── SELF-REPORTING: on freeze or JS error the game ships its own log to Jarvis over Telegram.
+   No user action needed — freeze happens, log arrives, debugging starts from data. ── */
+let lastReport = 0;
+function postLog(reason){
+  const now = performance.now();
+  if(now - lastReport < 15000) return;              // debounce: one report per 15s
+  lastReport = now;
+  const lines = DBGLOG.buf.slice(-140).join('\n');
+  dlog('⚠ AUTO-REPORT → Jarvis: ' + reason);
+  try{
+    fetch('/api/log', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ log: lines, reason: reason + ' — ' + (MOBILE? 'mobile':'desktop') + (location.search.indexOf('fakecam')>=0? ' FAKECAM':'') }) })
+      .then(r=>r.json()).then(j=>{ if(j && j.sent) dlog('auto-report delivered'); else dlog('auto-report failed: ' + JSON.stringify(j)); })
+      .catch(e=>dlog('auto-report network fail'));
+  }catch(e){ dlog('auto-report threw: ' + String(e).slice(0,60)); }
+}
+setTimeout(()=>{ if(/[?&]errtest=1/.test(location.search)) throw new Error('UAT auto-report chain test'); }, 6000);
+window.addEventListener('error', (ev)=>{ dlog('⚠ JS ERROR — ' + (ev.message||'?') + ' @ ' + (ev.filename||'').split('/').pop() + ':' + ev.lineno); postLog('JS error: ' + (ev.message||'?').slice(0,80)); });
+window.addEventListener('unhandledrejection', (ev)=>{ dlog('⚠ UNHANDLED PROMISE REJECT — ' + String(ev.reason).slice(0,100)); postLog('promise reject: ' + String(ev.reason).slice(0,80)); });
+function dlogFps(){                      // call once per draw frame; reports fps every 5s
+  DBGLOG.fpsC++;
+  const now = performance.now();
+  if(now - DBGLOG.fpsT >= 5000){
+    const fps = Math.round(DBGLOG.fpsC / ((now-DBGLOG.fpsT)/1000));
+    dlog(fps < 15 ? '⚠ DRAW LOOP ONLY ' + fps + 'fps — main thread saturated or blocked' : 'draw ' + fps + 'fps ok');
+    if(fps < 12) postLog('MAIN THREAD SATURATED — draw ' + fps + 'fps, beats=' + (G.ict? G.ict.count : '?') + ' hold=' + (G.hold? 'YES' : 'no'));
+    if(latestHands && (performance.now() - latestHands.t) > 3000) dlog('⚠ no detection results for ' + Math.round((performance.now()-latestHands.t)/1000) + 's');
+    DBGLOG.fpsC = 0; DBGLOG.fpsT = now;
+  }
+}
+
+/* score data */
+let BPM = 72, SPB = 60/BPM;               // seconds per beat (tempo picked at start)
+function setTempo(b){ BPM = b; SPB = 60/b; }
+const bars = [];                              // each bar: 4 beats; beat = array of notes
+const N = (n, o) => {                         // note name -> freq
+  const idx = {C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11}[n];
+  return 440 * Math.pow(2, (idx + 12*(o+1) - 69)/12);
+};
+// Beethoven 5th, 1st mvt opening — the REAL motif (G-G-G-Eb / F-F-F-D), simplified for synth orchestra
+// mel/bass notes: {b: beat position (fractional), n, d: dur in beats, v: 's'tring|'b'rass}
+const SC = [];
+const M = (b,n,d,v)=>({b,n,d,v:v||'s'});
+function addBar(mel, bass, perc){ SC.push({mel, bass, perc}); }
+// bar 1: dun-dun-dun-DAAA (G G G Eb—) 
+addBar([M(0,'G',.45),M(.5,'G',.45),M(1,'G',.45),M(1.5,'Eb',2.2)],
+       [M(0,'C',1),M(1,'C',.5),M(1.5,'C',.5),M(2,'C',.5),M(2.5,'C',.5)], true);
+// bar 2: da-da-da-DUM (F F F D—)
+addBar([M(1,'F',.45),M(1.5,'F',.45),M(2,'F',.45),M(2.5,'D',1.6)],
+       [M(0,'C',1),M(1,'D',.5),M(1.5,'D',.5),M(2,'D',.5),M(2.5,'D',.5)], false);
+// bar 3: ascending bridge Eb-G-C
+addBar([M(0,'Eb',.9,'w'),M(1,'G',.9,'w'),M(2,'C',.9,'w'),M(3,'C',1.9,'w')],
+       [M(0,'C',2),M(2,'C',2)], false);
+// bar 4: F-Ab-D climb
+addBar([M(0,'F',.9),M(1,'Ab',.9),M(2,'D',.9),M(3,'D',1.9)],
+       [M(0,'D',2),M(2,'D',2)], true);
+// bar 5: brass proclamation C—
+addBar([M(0,'C',3,'b'),M(3,'C',1,'s')],
+       [M(0,'C',3),M(3,'C',1)], true);
+// bar 6: reprise of the motif, brass fortissimo
+addBar([M(0,'G',.45,'b'),M(.5,'G',.45,'b'),M(1,'G',.45,'b'),M(1.5,'Eb',2.2,'b'),M(3.5,'F',.45),M(3.5,'F',.45)],
+       [M(0,'C',2),M(2,'Ab',2)], false);
+// bar 7: descent to the final
+addBar([M(0,'F',.9,'w'),M(1,'D',.9,'w'),M(2,'Bb',.9,'w'),M(3,'C',1.9,'w')],
+       [M(0,'D',2),M(2,'C',2)], false);
+// bar 8: unison C finale, fermata
+addBar([M(0,'C',3.4,'b'),M(0,'C',3.4,'s')],
+       [M(0,'C',3.4)], true);
+
+/* ───────────────────────── audio engine ───────────────────────── */
+let AC = null, master, convGain, secGain = null;
+function initAudio(){
+  AC = new (window.AudioContext||window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value = .9;
+  const comp = AC.createDynamicsCompressor();
+  comp.threshold.value=-18; comp.ratio.value=6;
+  master.connect(comp); comp.connect(AC.destination);
+  // section buses: strings, woodwinds, brass, percussion — DARK until cued in
+  secGain = [0,1,2,3].map(()=>{ const g=AC.createGain(); g.gain.value=0; g.connect(master); return g; });
+}
+function env(g, t, a, d, s, r, dur, peak){
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t+a);
+  g.gain.exponentialRampToValueAtTime(peak*.7, t+a+d);
+  g.gain.setValueAtTime(peak*.7, t+Math.max(a+d, dur*.8));
+  g.gain.exponentialRampToValueAtTime(.0001, t+Math.max(a+d, dur*.8)+r);
+}
+function playNote(freq, t, dur, voice, vol){
+  if(!AC || !secGain) return;
+  const o = AC.createOscillator(), o2 = AC.createOscillator(), g = AC.createGain(), f = AC.createBiquadFilter();
+  let dest;
+  if(voice==='b'){ o.type='square'; o2.type='square'; f.frequency.value=1400; env(g,t,.02,.08,.8,.35,dur,vol*.32); dest=secGain[2]; }
+  else if(voice==='w'){ o.type='triangle'; o2.type='sine'; f.frequency.value=1600; env(g,t,.04,.1,.75,.4,dur,vol*.30); dest=secGain[1]; }
+  else { o.type='sawtooth'; o2.type='sawtooth'; f.frequency.value=900; env(g,t,.05,.12,.7,.4,dur,vol*.24); dest=secGain[0]; }
+  o.frequency.value=freq; o2.frequency.value=freq*1.005;
+  o.connect(f); o2.connect(f); f.connect(g); g.connect(dest);
+  o.start(t); o2.start(t); const end = t+dur+1.2; o.stop(end); o2.stop(end);
+}
+function playBass(freq, t, dur, vol){
+  if(!AC || !secGain) return;
+  const o=AC.createOscillator(), o2=AC.createOscillator(), g=AC.createGain(), f=AC.createBiquadFilter();
+  o.type='sawtooth'; o2.type='sawtooth'; o.frequency.value=freq/2; o2.frequency.value=freq/2*1.004;
+  f.type='lowpass'; f.frequency.value=420;
+  env(g,t,.04,.1,.75,.5,dur,vol*.28);
+  o.connect(f); o2.connect(f); f.connect(g); g.connect(secGain[0]);
+  o.start(t); o2.start(t); const e=t+dur+1.4; o.stop(e); o2.stop(e);
+}
+function timpani(t, vol){
+  if(!AC || !secGain) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(88,t); o.frequency.exponentialRampToValueAtTime(48,t+.28);
+  g.gain.setValueAtTime(vol*.6,t); g.gain.exponentialRampToValueAtTime(.0001,t+.42);
+  o.connect(g); g.connect(secGain[3]); o.start(t); o.stop(t+.5);
+  const b=AC.createBuffer(1, 4410, AC.sampleRate), ch=b.getChannelData(0);
+  for(let i=0;i<ch.length;i++) ch[i]=(Math.random()*2-1)*Math.pow(1-i/ch.length,3);
+  const s=AC.createBufferSource(); s.buffer=b; const g2=AC.createGain(); g2.gain.value=vol*.18;
+  s.connect(g2); g2.connect(secGain[3]); s.start(t);
+}
+function stumble(){                             // the orchestra loses you
+  if(!AC) return;
+  const t=AC.currentTime;
+  for(let i=0;i<5;i++){
+    const f=[196,207,220,233,246][i];
+    playNote(f*(.94+Math.random()*.12), t+i*.05, .5, 's', .5);
+  }
+}
+function applause(vol){
+  if(!AC) return;
+  const t=AC.currentTime;
+  for(let i=0;i<42;i++){
+    const at=t+.1+Math.random()*2.2;
+    const b=AC.createBuffer(1, 900, AC.sampleRate), ch=b.getChannelData(0);
+    for(let j=0;j<ch.length;j++) ch[j]=(Math.random()*2-1)*Math.pow(1-j/ch.length,2);
+    const s=AC.createBufferSource(); s.buffer=b; const g=AC.createGain();
+    g.gain.value=vol*(.12+Math.random()*.2); s.connect(g); g.connect(master); s.start(at);
+  }
+}
+function groan(){                                // the hall disapproves
+  if(!AC) return;
+  const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(), f=AC.createBiquadFilter();
+  o.type='sawtooth'; o.frequency.setValueAtTime(98,t); o.frequency.linearRampToValueAtTime(65,t+1.4);
+  f.type='lowpass'; f.frequency.value=300; g.gain.setValueAtTime(.16,t); g.gain.exponentialRampToValueAtTime(.0001,t+1.5);
+  o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t+1.6);
+}
+
+/* ───────────────────────── game state (Maestro-style note targets) ───────────────────────── */
+const G = {
+  score:0, combo:0, maxCombo:0, hits:{perfect:0,good:0,ok:0,miss:0},
+  tension:0, finished:false, handOpen:.7,
+  songT0:0, songDur:0, targets:[], bursts:[],
+  cues:[], fermatas:[], dyn:.55,
+  batonHand:null, freeHand:null,
+  stats:{cues:0, accents:0, fermPerfect:0, fermGood:0, fermOk:0}
+};
+// 4/4 conducting pattern (screen fractions): 1 down, 2 in-left, 3 right, 4 up
+const PAT = [[.5,.70],[.30,.58],[.70,.46],[.5,.32]];
+
+// orchestra sections: arrows come FROM a section toward your baton
+const SECTIONS = [
+  { name:'STRINGS',    col:'#f4c960', x:.14 },
+  { name:'WOODWINDS',  col:'#7ec8b4', x:.38 },
+  { name:'BRASS',      col:'#e08a4a', x:.62 },
+  { name:'PERCUSSION', col:'#d05656', x:.86 },
+];
+function buildTargets(){
+  // ICTUS-DRIVEN score — real Maestro model: the orchestra plays on YOUR beat.
+  // No fixed clock: each baton stroke advances the beat; tempo = your stroke interval.
+  G.beats = [];
+  SC.forEach((bar, bi)=>{
+    for(let k=0;k<4;k++){
+      const mel=[], bass=[];
+      (bar.mel||[]).forEach(m=>{ if(Math.floor(m.b)===k) mel.push(m); });
+      (bar.bass||[]).forEach(m=>{ if(Math.floor(m.b)===k) bass.push(m); });
+      G.beats.push({ mel, bass, perc: k===0 && !!bar.perc, accent: k===0 });
+    }
+  });
+  // cue windows in BEATS — sections sit DARK until you point them in (late = they join, tension rises)
+  G.cues = [
+    { sec:SECTIONS[0], open:-2, close:0,  dwell:0, done:true, hit:true },   // strings — with you from the top
+    { sec:SECTIONS[1], open:5,  close:9, dwell:0, done:false },            // woodwinds — bar 3
+    { sec:SECTIONS[3], open:9,  close:13, dwell:0, done:false },           // percussion — bar 4
+    { sec:SECTIONS[2], open:13, close:17, dwell:0, done:false },            // brass — bar 5
+  ];
+  // FERMATAS: the hall sustains until YOUR cut — no fixed clock
+  G.ferms = [ { at:1, resume:4, openFrac:0, phase:0, done:false }, { at:29, resume:31, openFrac:0, phase:0, done:false } ];
+  G.secOn = [true,false,false,false];
+  G.ict = { count:-1, last:0, ivls:[], med:60/BPM, bpm:BPM };
+  G.hold = null; G.wait = false; G.endAt = 0;
+}
+function medianI(a){ const t=[...a].sort((x,y)=>x-y); return t.length? t[Math.floor(t.length/2)] : .8; }
+function openTh(){ return CAL.openHi!=null? CAL.openHi*.85 : .5; }              // calibration-aware thresholds
+function fistTh(){ return CAL.openLo!=null? Math.max(.12, CAL.openLo + (CAL.openHi - CAL.openLo)*.25) : .3; }
+function dynTarget(h){                                                            // personalized ff/p mapping
+  if(LEARN.dynHi!=null && LEARN.dynLo!=null && LEARN.dynLo - LEARN.dynHi > .04)
+    return Math.max(0, Math.min(1, (LEARN.dynLo - h.y)/(LEARN.dynLo - LEARN.dynHi)));
+  return Math.max(0, Math.min(1, (0.80 - h.y)/0.45));
+}
+
+function sectionOn(i, ramp){
+  if(secGain && AC){ try{ secGain[i].gain.setTargetAtTime(1, AC.currentTime, ramp||.2); }catch(e){} }
+}
+function processCues(dtF){
+  const fh = G.freeHand;
+  for(const c of G.cues){
+    if(c.done) continue;
+    const idx = SECTIONS.indexOf(c.sec);
+    c.window = false;
+    if(G.ict.count > c.close){                       // window blown — they join late, hall murmurs
+      c.done = true; c.auto = true; G.secOn[idx] = true; sectionOn(idx,.4);
+      G.tension = Math.min(100, G.tension+6); flash(c.sec.name + ' JOINED LATE', '#c9b48a'); continue;
+    }
+    if(G.ict.count < c.open) continue;
+    c.window = true;                                  // pulsing prompt in the strip
+    if(fh && fh.pointing && Math.abs((fh.palmX/W) - c.sec.x) < .15){
+      c.dwell += dtF;
+      if(c.dwell > .30){
+        c.done = true; c.hit = true; G.secOn[idx] = true; sectionOn(idx,.25);
+        G.stats.cues++; G.score += 150; G.tension = Math.max(0, G.tension-6);
+        flash(c.sec.name + ' IN', c.sec.col);
+      }
+    } else c.dwell = Math.max(0, c.dwell - dtF*2);
+  }
+}
+function cutFermata(){                            // the cut gesture IS the resume beat
+  const f = G.hold; if(!f) return;
+  const grade = f.openFrac > 1.0? 'perfect' : f.openFrac > .6? 'good' : 'ok';
+  G.stats['ferm' + (grade==='perfect'?'Perfect':grade==='good'?'Good':'Ok')]++;
+  G.score += {perfect:200, good:120, ok:50}[grade];
+  f.done = true; f.phase = 0; G.hold = null;
+  dlog('FERMATA cut — grade ' + grade + ' openFrac ' + f.openFrac.toFixed(2));
+  flash('FERMATA ' + grade.toUpperCase() + ' — CUT!', '#ffd970');
+  G.ict.count = f.resume - 1;                        // play the resume beat now
+  const b = G.beats[f.resume]; if(b) playBeat(b, CAL.start*1.3);
+  G.ict.count = f.resume; G.ict.last = performance.now()/1000;
+  if(G.ict.count >= G.beats.length - 1){ G.endAt = G.ict.last + 1.2; dlog('END ARMED (cut): count=' + G.ict.count + ' len=' + G.beats.length + ' at ' + G.ict.last.toFixed(1) + 's'); }
+}
+function processFermatas(dtF){
+  const f = G.hold; if(!f) return;
+  const h = G.freeHand || G.batonHand;
+  if(h && h.open >= openTh()) f.openFrac += dtF;
+  else if(f.openFrac < .35) G.tension = Math.min(100, G.tension + 2*dtF);   // not holding — hall murmurs
+  if(h && f.openFrac > .35 && h.open <= fistTh()) cutFermata();
+}
+function fermataTap(){                               // tap/keyboard fallback for the cut
+  if(state!==STATE.PLAY || !G.hold) return;
+  if(G.hold.openFrac < .25) G.hold.openFrac = .5;    // give taps a fair hold
+  cutFermata();
+}
+function endGame(failed){
+  dlog('END SCREEN — failed=' + !!failed + ' finished=' + G.finished + ' score=' + G.score);
+  if(G.finished) return; G.finished = true; state = STATE.END;
+  if(AC && master){ try{ master.gain.setTargetAtTime(.9, AC.currentTime, .3); }catch(e){} }
+  const total = G.hits.perfect+G.hits.good+G.hits.ok+G.hits.miss;
+  const acc = total? Math.round(100*(G.hits.perfect+G.hits.good*.6+G.hits.ok*.3)/total) : 0;
+  const rank = failed? 'DISMISSED' : acc>=90? 'MAESTRO' : acc>=75? 'FIRST VIOLIN' : acc>=55? 'CONCERTMASTER' : 'REHEARSAL, AGAIN';
+  // LEARN: fold this session in, adapt difficulty for the next one
+  LEARN.sessions = (LEARN.sessions||0) + 1;
+  LEARN.acc = (LEARN.acc==null? acc : Math.round(LEARN.acc*.6 + acc*.4));
+  if(acc >= 85) LEARN.ramp = Math.max(.85, (LEARN.ramp||1) - .04);       // hot streak — windows tighten
+  else if(acc <= 55) LEARN.ramp = Math.min(1.15, (LEARN.ramp||1) + .05); // struggling — windows widen
+  else LEARN.ramp = (LEARN.ramp||1) + (1 - (LEARN.ramp||1))*.3;
+  saveLearn();
+  if(!failed) applause(.3 + acc/200);
+  const html = `<div style="line-height:2">${failed?'<span style="color:#e06040;font-size:1.4em;letter-spacing:.2em">THE HALL GOES DARK</span><br>You are dismissed. The orchestra plays on without you.':'<span style="color:#f4c960;font-size:1.4em;letter-spacing:.2em">FINALE</span>'}<br>
+  <b>SCORE</b> ${G.score} · <b>COMBO</b> x${G.maxCombo}<br>
+  PERFECT ${G.hits.perfect} · GOOD ${G.hits.good} · OK ${G.hits.ok} · MISSED ${G.hits.miss}<br>
+  CUES ${G.stats.cues}/4 · ACCENTS ${G.stats.accents} · FERMATAS ${(G.stats.fermPerfect||0)+(G.stats.fermGood||0)+(G.stats.fermOk||0)}/2<br>
+  <b>ACCURACY</b> ${acc}%<br>
+  <span style="font-size:.85em;color:#b89b6a">adaptive · bias ${Math.round(LEARN.tBias*1000)}ms · window x${(LEARN.ramp||1).toFixed(2)} · accent x${(LEARN.accentX||1.7).toFixed(2)} · session ${LEARN.sessions}</span><br>
+  <span style="font-size:1.6em;color:#f4c960">${rank}</span><br><br>
+  <button onclick="location.reload()" style="font:inherit;letter-spacing:.2em;padding:12px 34px;background:#241304;color:#f4c960;border:1px solid #a67c2e;cursor:pointer">ENCORE</button></div>`;
+  const ov = document.getElementById('overlay'); ov.innerHTML = `<h1 style="font-size:2.2em">${rank}</h1><div class="rule" style="margin-top:20px">${html}</div>`; ov.style.display='flex';
+}
+function playBeat(b, vyS){                           // your stroke plays THIS beat through cued sections
+  if(!AC || !b) return;
+  const t = AC.currentTime + .02;
+  const med = Math.max(.25, G.ict.med||.6);
+  const strong = Math.min(1, ((vyS||CAL.start)/CAL.start - 1));   // snap harder = bigger attack
+  b.mel.forEach(m=>{
+    const si = m.v==='b'? 2 : m.v==='w'? 1 : 0;
+    if(!G.secOn[si]) return;
+    playNote(N(m.n,5), t + (m.b - Math.floor(m.b))*med, m.d*med, m.v, .75 + .25*strong);
+  });
+  if(G.secOn[0]) b.bass.forEach(m=> playBass(N(m.n,3), t + (m.b - Math.floor(m.b))*med, m.d*med, .9));
+  if(b.perc && G.secOn[3]) timpani(t, .85);
+}
+
+function scheduleSong(t0){
+  SC.forEach((bar,i)=>{
+    for(const m of bar.mel) playNote(N(m.n,5), t0+(i*4+m.b)*SPB, m.d*SPB, m.v, .9);
+    for(const m of bar.bass) playBass(N(m.n,3), t0+(i*4+m.b)*SPB, m.d*SPB, .9);
+    if(bar.perc) timpani(t0+i*4*SPB, .85);
+  });
+}
+
+function songNow(){ return performance.now()/1000 - G.songT0; }
+
+const FLASH = document.getElementById('flash');
+function flash(txt, color){
+  FLASH.textContent = txt; FLASH.style.color = color; FLASH.style.opacity = 1;
+  FLASH.style.transition='none'; requestAnimationFrame(()=>{ FLASH.style.transition='opacity .7s'; FLASH.style.opacity=0; });
+}
+
+function patPos(t){                             // beat-position -> screen point along the pattern
+  const bp = Math.max(0, t/SPB) % 4;
+  const i0 = Math.floor(bp), fr = bp - i0;
+  const a = PAT[i0], b = PAT[(i0+1)%4];
+  return { x:(a[0]+(b[0]-a[0])*fr)*W, y:(a[1]+(b[1]-a[1])*fr)*H };
+}
+
+function ictusNow(vyS){                     // every baton stroke = the orchestra's NEXT BEAT (real Maestro model)
+  if(state!==STATE.PLAY) return;
+  const nowS = performance.now()/1000;
+  if(G.hold) return;                        // strokes during a fermata do nothing — the FIST cuts
+  if(G.wait){ G.wait = false; flash('THEY FOLLOW YOU', '#9fd66a'); }
+  const B = G.ict;
+  if(B.count >= 0){
+    const ivl = nowS - B.last;
+    if(ivl > .22 && ivl < 6){
+      B.ivls.push(ivl); if(B.ivls.length > 8) B.ivls.shift();
+      B.med = medianI(B.ivls); B.bpm = Math.round(60/B.med);
+      const dev = Math.abs(ivl - B.med)/B.med;                  // steadiness = your tempo consistency
+      const ramp = LEARN.ramp || 1;
+      const grade = dev<=.08*ramp? 'perfect' : dev<=.16*ramp? 'good' : dev<=.30? 'ok' : 'unsteady';
+      if(grade==='unsteady'){ G.combo = 0; G.hits.ok++; G.tension = Math.min(100, G.tension+4); flash('UNSTEADY', '#e08040'); }
+      else {
+        G.hits[grade]++;
+        if(grade!=='ok') G.combo++; else G.combo = 0;
+        G.maxCombo = Math.max(G.maxCombo, G.combo);
+        G.score += {perfect:100, good:60, ok:30}[grade] + (G.combo>=4? Math.min(50, G.combo*4):0);
+        G.tension = Math.max(0, G.tension-3);
+        flash({perfect:'PERFECT', good:'GOOD', ok:'OK'}[grade], {perfect:'#ffd970', good:'#9fd66a', ok:'#c9b48a'}[grade]);
+      }
+      G.bursts.push({ x:W*.5, y:H*.55, at:nowS, grade: grade==='unsteady'?'ok':grade });   // seconds — the renderer's clock
+    }
+  }
+  B.count++; B.last = nowS; B.dotT = nowS;
+  const beat = G.beats[B.count];
+  if(beat){
+    if(beat.accent && vyS && vyS > CAL.start*(LEARN.accentX||1.7)){ G.score += 80; G.stats.accents++; }
+    playBeat(beat, vyS);
+  }
+  for(const f of G.ferms){                   // the hold begins once f.at's beat has fired
+    if(!f.done && !G.hold && B.count === f.at){
+      f.phase = 1; f.openFrac = 0; G.hold = f;
+      dlog('FERMATA hold begins at beat ' + B.count);
+      flash('FERMATA — HOLD PALM, FIST TO CUT', '#ffd970');
+    }
+  }
+  if(!G.endAt && B.count >= G.beats.length - 1){ G.endAt = nowS + 1.5; dlog('END ARMED (stroke): count=' + B.count + ' len=' + G.beats.length + ' endAt=' + G.endAt.toFixed(1)); }   // final beat played — applause timer (set ONCE: strokes past the end must not re-arm it)
+  if(B.count>0 && B.count%16===0) dlog('beat progress: count=' + B.count + ' len=' + G.beats.length);
+}
+
+addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); if(state===STATE.PLAY){ fermataTap(); ictusNow(); } else if(state===STATE.TRAIN){ trainTap(.5,.5); } } });
+addEventListener('pointerdown', ()=>{ if(state===3 && CALIB && CALIB.done) location.reload(); });
+let lastPtrIctus = 0;
+addEventListener('pointerdown', e=>{ if(state===STATE.PLAY && e.target.tagName!=='BUTTON'){ lastPtrIctus = performance.now(); fermataTap(); ictusNow(); } });
+addEventListener('click', e=>{ if(state===STATE.PLAY && e.target.tagName!=='BUTTON' && performance.now()-lastPtrIctus > 250){ fermataTap(); ictusNow(); } });   // click-only envs must be able to cut the fermata too
+
+/* hand tracking */
+let landmarker=null, video=null, vctx=null, hand=null, handPts=[], lastT=0, lastHandSeenT = 0;
+// calibrated swing thresholds (normalized units/sec); persisted from CALIBRATE mode
+let CAL = { start:.35, bottom:.15 };
+try{ const c = JSON.parse(localStorage.getItem('maestro_cal')||'null'); if(c && c.start>0) CAL = c; }catch(e){}
+// adaptive profile — learned from calibration + training + every play session (persists like CAL)
+let LEARN = {};
+try{ LEARN = JSON.parse(localStorage.getItem('maestro_learn')||'{}'); }catch(e){ LEARN = {}; }
+LEARN.accentX = LEARN.accentX || 1.7; LEARN.ramp = LEARN.ramp || 1; LEARN.tBias = LEARN.tBias || 0;
+function saveLearn(){ try{ localStorage.setItem('maestro_learn', JSON.stringify(LEARN)); }catch(e){} }
+addEventListener('error', e => { DBG.err = 'JS: ' + String(e.message||e).slice(0,100); document.title = 'ERR: ' + String(e.message||e).slice(0,90) + ' @' + (e.lineno||'?'); });
+addEventListener('unhandledrejection', e => { document.title = 'REJ: ' + String(e.reason && e.reason.message || e.reason).slice(0,110); });
+let CALIB = null;   // active calibration session: {n, peaks:[], vyS, phase, lastCY, lastCT, peak}
+// ── hand-tracking Web Worker: MediaPipe runs OFF the main thread ──
+// main -> worker: one ImageBitmap per frame (transferable)
+// worker -> main: compact Float32Array(42) per hand (x,y pairs), transferred
+let hworker = null, latestHands = null, inflight = false, lastPT = 0, calLastT = 0, workerFatal = false;
+const PIPE = { sent:0, replied:0, lastR: 0, restarts:0 };   // pipeline flow counters — shown in HUD, silent failures become visible numbers
+const MOBILE = /mobile=1/.test(location.search) || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || (matchMedia && matchMedia('(pointer:coarse)').matches);   // ?mobile=1 = UAT: force the phone pipeline (RGBA pump, GPU-first init)
+const FORCE_DELEGATE = (location.search.match(/delegate=(gpu|cpu)/i)||[])[1];   // UAT override
+const LIVE_DELEGATE = { d:null };     // which delegate the live worker runs
+const EVER_HAND = { seen:false };     // has ANY hand been detected this boot
+const UAT_BLINDGPU = /gpublind=1/.test(location.search);   // UAT: simulate a 'ready' but blind GPU end-to-end
+let BLIND_SWAPPED = false;
+const MODEL_URL = "https://jarvis-4ab907e4.base44.app/functions/maestroAsset?u=https%3A%2F%2Fstorage.googleapis.com%2Fmediapipe-models%2Fhand_landmarker%2Fhand_landmarker%2Ffloat16%2F1%2Fhand_landmarker.task";
+let workerRetries = 0;
+function warmWorker(delegate){                     // worker died? restart the WORKER — never the main-thread landmarker mid-game
+  workerRetries++;
+  if(workerRetries > 3){
+    DBG.stages.model = 'WORKER FAILED x' + (workerRetries-1);
+    if(MOBILE){ DBG.stages.model += ' — tap mode'; flash('TRACKING GONE — TAP MODE', '#e06040'); return; }
+    flash('WORKER DEAD — SYNC FALLBACK (laggy)', '#e08040');     // desktop last resort: sync CPU with adaptive throttle
+    buildSyncLandmarker().then(ok=>{ if(ok && state===STATE.PLAY) runHandLoop(); });
+    return;
+  }
+  DBG.stages.model = 'warming (retry ' + (workerRetries-1) + ', ' + delegate + ', up to 60s on laptops)…';
+  tryWorker(MODEL_URL, delegate).then(ok=>{
+    if(ok){ DBG.stages.model = 'OK (worker ' + (LIVE_DELEGATE.d||delegate) + ', retry ' + (workerRetries-1) + ')'; workerRetries = 0; return; }
+    // GPU only ever tried on PHONES (some run only GPU). Desktop iGPUs (Intel) silently
+    // return zero detections on GPU — a CPU-only retry is the only honest desktop path.
+    warmWorker(MOBILE && delegate==='CPU' ? 'GPU' : 'CPU');
+  });
+}
+function startPump(){
+  const pumpFrame = ()=>{
+    if(hworker && video && video.readyState>=2){
+      const now = performance.now();
+      if(!inflight && now - lastPT > (state===3? 40 : 35)){    // ONE frame in flight at a time — the worker self-paces;
+        lastPT = now; PIPE.sent++; PIPE.lastS = now;           // no busy-skips, no queue gap, freshest frame when it frees up
+        if(PIPE.sent===1 || PIPE.sent%100===0) dlog('pump: ' + PIPE.sent + ' frames sent, ' + PIPE.replied + ' replied');
+        if(MOBILE || /rgba=1/.test(location.search)){
+          // createImageBitmap(video) can hard-stall the main thread on Android —
+          // draw the frame into a fixed 320x240 CPU canvas and ship raw pixels instead
+          if(!startPump.pc){ startPump.pc = document.createElement('canvas'); startPump.pc.width=320; startPump.pc.height=240; startPump.pcx = startPump.pc.getContext('2d', {willReadFrequently:true}); }
+          try{
+            startPump.pcx.drawImage(video, 0, 0, 320, 240);
+            const id = startPump.pcx.getImageData(0, 0, 320, 240);
+            inflight = true;
+            hworker.postMessage({op:'frameRGBA', buf:id.data.buffer, w:320, h:240, t:now, t0:performance.now(), vis: document.visibilityState==='visible'}, [id.data.buffer]);
+          }catch(e){}
+        }else{
+          inflight = true;
+          createImageBitmap(video).then(bm=>{
+            if(!hworker){ bm.close(); inflight = false; return; }
+            hworker.postMessage({op:'frame', bitmap:bm, t:now, t0:performance.now(), vis: document.visibilityState==='visible'}, [bm]);
+          }).catch(()=>{ inflight = false; });
+        }
+      }
+    }
+    requestAnimationFrame(pump);   // cheap gate: transfers only, never blocks render
+  };
+  const pump = ()=>{ try{ pumpFrame(); }catch(e){ dlog('⚠ PUMP EXCEPTION — ' + String(e && e.message || e).slice(0,90) + ' — pump survived'); requestAnimationFrame(pump); } };
+  requestAnimationFrame(pump);
+}
+function ingestLandmarks(list, now, handedness){   // shared consumer: worker path AND sync fallback
+  G.hands = [];
+  if(!list || !list.length){ G.batonHand = null; G.freeHand = null; return; }
+  const hands = list.slice(0,2).map((pts, i)=>{
+    const open = openness(pts);
+    const cx3 = (pts[0].x + pts[5].x + pts[17].x) / 3;
+    const cy = (pts[0].y + pts[5].y + pts[17].y) / 3;
+    const idxD = Math.hypot(pts[8].x - pts[0].x, pts[8].y - pts[0].y);
+    const midD = Math.hypot(pts[12].x - pts[0].x, pts[12].y - pts[0].y);
+    return {
+      open, palmX:(1-cx3)*W, palmY:cy*H, x:cx3, y:cy, pts,
+      pointing: idxD > midD * 1.25,
+      label: (handedness && handedness[i]) || ''
+    };
+  });
+  for(const h of hands) G.hands.push({ open:h.open, palmX:h.palmX, palmY:h.palmY });
+  // role assignment: RIGHT hand = baton (falls back to rightmost); LEFT = expression hand
+  let baton = null, free = null;
+  if(hands.length === 1){ baton = hands[0]; }
+  else {
+    baton = hands.find(h=>h.label==='Right') || hands.reduce((a,b)=>a.palmX>b.palmX?a:b);
+    free  = hands.find(h=>h.label==='Left' && h!==baton) || hands.find(h=>h!==baton) || null;
+  }
+  G.batonHand = baton; G.freeHand = free;
+  // BATON: swing state machine (single pool)
+  const st = HS_pool[0];
+  if(st.lastCY !== null){
+    const dt = Math.max(1, now - st.lastCT);
+    const vy = (baton.y - st.lastCY) / dt * 1000;
+    const a = 1 - Math.exp(-dt/80);          // rate-independent smoothing (worker fps is lower)
+    st.vyS = st.vyS*(1-a) + vy*a;
+    if(st.phase === 'armed' && st.vyS > CAL.start) st.phase = 'down';
+    if(st.phase === 'down') st.peak = Math.max(st.peak||0, st.vyS);
+    if(st.phase === 'down' && st.vyS < CAL.bottom){
+      st.phase = 'armed';
+      ictusNow(st.peak);          // peak velocity of the stroke -> accent grading
+      st.peak = 0;
+    }
+  }
+  st.lastCY = baton.y; st.lastCT = now;
+  G.handOpen = baton.open;
+  DBG.phase = st.phase; DBG.vyS = Math.round(st.vyS*10)/10;
+  // FREE HAND: live dynamics — palm up = forte, palm down = piano
+  if(free){
+    const targetDyn = dynTarget(free);   // calibration-aware ff/p mapping
+    G.dyn += (targetDyn - G.dyn) * .18;
+    if(AC && master && now - (G._dynT||0) > .12){
+      G._dynT = now;
+      try{ master.gain.setTargetAtTime(.40 + .55*G.dyn, AC.currentTime, .12); }catch(e){}
+    }
+  }
+}
+const HS_pool = [{ phase:'armed', vyS:0, lastCY:null, lastCT:0 }];
+function HS_init(){ return HS_pool; }
+function tryWorker(model, delegate){
+  return new Promise(resolve=>{
+    let wk;
+    const src = [
+      "let LM=null, busy=false;",
+      "let D_DELEGATE = '?';",
+      "self.onmessage = async (ev)=>{",
+      "  const d = ev.data;",
+      "  if(d.op==='init'){ D_DELEGATE = d.delegate||'CPU';",
+      "    try{",
+      "      const V = await import('https://jarvis-4ab907e4.base44.app/functions/maestroAsset?u=https%3A%2F%2Fcdn.jsdelivr.net%2Fnpm%2F%40mediapipe%2Ftasks-vision%400.10.14%2Fvision_bundle.mjs');",
+      "      const files = await V.FilesetResolver.forVisionTasks('https://jarvis-4ab907e4.base44.app/functions/maestroAsset?u=https%3A%2F%2Fcdn.jsdelivr.net%2Fnpm%2F%40mediapipe%2Ftasks-vision%400.10.14%2Fwasm');",
+      "      LM = await V.HandLandmarker.createFromOptions(files, {",
+      "        baseOptions:{ modelAssetPath: d.model, delegate: d.delegate },",
+      "        numHands:2, runningMode:'VIDEO',",
+      "        minHandDetectionConfidence:.3, minHandPresenceConfidence:.3, minTrackingConfidence:.3 });",
+      "      self.postMessage({op:'ready', delegate: D_DELEGATE});",
+      "    }catch(e){ self.postMessage({op:'error', msg:String(e).slice(0,120)}); }",
+      "    return;",
+      "  }",
+      "  let lastFrame=0, lastVis=false, framesSeen=0;",
+      "  setInterval(()=>{",                       // MAIN-THREAD WEDGE DETECTOR: the worker survives a dead main thread,
+      "    if(framesSeen>=5 && lastVis && lastFrame && Date.now()-lastFrame > 30000){",   // so IT reports when frames stop while the page is visible
+      "      fetch('/api/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'MAIN THREAD WEDGE — worker alive, no frames for '+Math.round((Date.now()-lastFrame)/1000)+'s while page visible', log:'worker heartbeat: frames='+framesSeen+' (main thread died — this is the only surviving reporter)'})}).catch(()=>{});",
+      "      lastFrame = Date.now();",
+      "    }",
+      "  }, 10000);",
+      "  const src = (d)=> d.bitmap? d.bitmap : (new ImageData(new Uint8ClampedArray(d.buf), d.w, d.h));",
+      "  if(d.op==='frame' || d.op==='frameRGBA'){",
+      "    lastFrame = Date.now(); lastVis = d.vis !== false; framesSeen++;",
+      "    if(!LM || busy){ if(d.bitmap) d.bitmap.close(); self.postMessage({op:'skip'}); return; }   // ALWAYS reply: silent drops wedge the pipeline",
+      "    busy = true;",
+      "    const tS = performance.now();",
+      "    try{",
+      "      let frame = src(d);",
+      "      let res = null;",
+      "      try{ res = LM.detectForVideo(frame, d.t); }",
+      "      catch(e1){",
+      "        if(frame && frame.close && d.bitmap){   // ImageBitmap path failing in this runtime: convert to ImageData, retry once",
+      "          const oc = new OffscreenCanvas(frame.width, frame.height);",
+      "          const ox = oc.getContext('2d'); ox.drawImage(frame, 0, 0); frame.close(); d.bitmap = null;",
+      "          res = LM.detectForVideo(ox.getImageData(0, 0, oc.width, oc.height), d.t);",
+      "        } else throw e1;",
+      "      }",
+      "      const L = res.landmarks || [];",
+      "      const hd = []; const out = [];",
+      "      for(let i=0;i<Math.min(2,L.length);i++){",
+      "        const f = new Float32Array(42);",
+      "        for(let j=0;j<21;j++){ f[j*2]=L[i][j].x; f[j*2+1]=L[i][j].y; }",
+      "        out.push(f);",
+      "        hd.push((res.handedness && res.handedness[i] && res.handedness[i][0])? res.handedness[i][0].categoryName : '');",
+      "      }",
+      "      self.postMessage({op:'hands', out, hd, inf: performance.now()-tS, t:d.t}, out.map(f=>f.buffer));",
+      "    }catch(e){ self.postMessage({op:'fatal', msg:String(e).slice(0,120)}); }",
+      "    finally{ if(d.bitmap) try{ d.bitmap.close(); }catch(e2){} busy = false; }   // busy ALWAYS releases",
+      "  }",
+      "};"
+    ].join("\n");
+    try{
+      wk = new Worker(URL.createObjectURL(new Blob([src], {type:'text/javascript'})));   // CLASSIC worker: MediaPipe's wasm loader calls importScripts, which is illegal in module workers
+    }catch(e){ resolve(false); return; }
+    let done = false;
+    const GPU_TMO = delegate==='GPU'? 20000 : 90000;   // GPU: init fast or never. CPU: laptops compile kernels slowly.
+    const T = setTimeout(()=>{ if(!done){ done=true; try{wk.terminate();}catch(e){} dlog('worker TIMEOUT after ' + (GPU_TMO/1000) + 's (' + delegate + ') — no ready'); resolve(false); } }, GPU_TMO);
+    wk.onmessage = (ev)=>{
+      const d = ev.data;
+      if(d.op==='ready'){
+        if(!done){ done=true; clearTimeout(T); hworker = wk; DBG.readyT = performance.now(); LIVE_DELEGATE.d = d.delegate||null; dlog('worker READY in ' + ((performance.now()-DBGLOG.t0)/1000).toFixed(1) + 's (' + (d.delegate||'?') + ' delegate) — pump starting'); startPump(); resolve(true); }
+      }
+      if(d.op==='error'){ if(!done){ done=true; clearTimeout(T); try{wk.terminate();}catch(e){} dlog('worker INIT ERROR — ' + (ev.data.msg||'?')); resolve(false); } }
+      if(d.op==='fatal' && !workerFatal){
+        workerFatal = true; hworker = null; inflight = false; latestHands = null;
+        dlog('⚠ worker FATAL — ' + (ev.data.msg||'?') + ' — restarting pipeline');
+        if(landmarker){ if(state===STATE.PLAY) runHandLoop(); }        // sync already live — resume it
+        else warmWorker('CPU');                                       // ALL platforms: restart the worker, off-thread
+      }
+      if(d.op==='skip' || d.op==='hands'){ PIPE.lastR = performance.now(); }
+      if(d.op==='skip'){ inflight = false; PIPE.replied++; if(++DBGLOG.skipN===10 || DBGLOG.skipN%100===0) dlog('⚠ worker skipping frames — busy/model lag (' + DBGLOG.skipN + ' drops)'); return; }
+      if(d.op==='hands'){
+        inflight = false; PIPE.replied++;
+        if(UAT_BLINDGPU && !BLIND_SWAPPED){ d.out = []; LIVE_DELEGATE.d = 'GPU'; }   // UAT: worker 'live' but blind
+        if(d.out && d.out.length) EVER_HAND.seen = true;
+        DBG.inf = Math.round(DBG.inf? DBG.inf*.8 + d.inf*.2 : d.inf);
+        DBG.cad = Math.min(400, Math.max(60, (DBG.inf||40)*1.35));   // never saturate the worker: inference headroom each frame — less CPU, fewer skips, fewer wedges
+        latestHands = { landmarks: d.out.map(f=>{ const a=[]; for(let j=0;j<21;j++) a.push({x:f[j*2], y:f[j*2+1]}); return a; }), handedness: d.hd||[], t: d.t };
+        if(d.out && d.out.length) lastHandSeenT = d.t;           // last time a HAND was actually in frame (empty replies must NOT refresh this)
+        if(latestHands.landmarks.length !== DBGLOG.lastHandsN){ dlog('hands ' + DBGLOG.lastHandsN + '→' + latestHands.landmarks.length + (latestHands.handedness[0]? ' (' + latestHands.handedness[0] + ')' : '') + ' inf ' + Math.round(d.inf) + 'ms'); DBGLOG.lastHandsN = latestHands.landmarks.length; }
+        if(state===STATE.PLAY){ try{ ingestLandmarks(latestHands.landmarks, performance.now(), latestHands.handedness); }catch(e){ DBG.ingN=(DBG.ingN||0)+1; dlog('⚠ INGEST EXCEPTION — ' + String(e && e.message || e).slice(0,90) + (DBG.ingN<=2? ' | ' + String(e && e.stack || '').split('\n').slice(1,3).join(' / ').slice(0,140) : '')); if(DBG.ingN<=2) postLog('ingest exception: ' + String(e && e.message || e).slice(0,80)); } }
+      }
+    };
+    wk.onerror = (e)=>{ if(!done){ done=true; clearTimeout(T); dlog('worker CRASHED — ' + (e.message||'?')); resolve(false); } else { dlog('worker crashed AFTER ready — ' + (e.message||'?')); } };
+    wk.postMessage({op:'init', model, delegate});
+  });
+}
+/* ── CAMERA / PIPELINE WATCHDOG — Android freezes the stream when backgrounded; recover automatically ── */
+const CAM = { stream:null, lastVT:-1, stallN:0, recovering:false, timer:null };
+function bindStream(stream){
+  CAM.stream = stream; CAM.lastVT = -1; CAM.stallN = 0;
+  try{ stream.getTracks().forEach(t=> t.addEventListener('ended', ()=>{ if(CAM.stream===stream) hangCam('track ended'); })); }catch(e){}
+  if(!CAM.timer) CAM.timer = setInterval(camWatch, 2000);
+}
+function hangCam(reason){
+  if(CAM.recovering) return; CAM.recovering = true;
+  DBG.stages.camera = 'HUNG (' + reason + ') — restarting…';
+  dlog('camera HUNG — ' + reason + ' — restarting');
+  flash('CAMERA HUNG — RESTARTING', '#e06040');
+  try{ CAM.stream && CAM.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  reinitCamera();
+}
+async function reinitCamera(){
+  try{
+    const stream = await Promise.race([
+      navigator.mediaDevices.getUserMedia({ video:{facingMode:'user', width:320, height:240} }),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('restart timeout')), 8000))
+    ]);
+    bindStream(stream);
+    video.srcObject = stream; await video.play();
+    DBG.stages.camera = 'OK (recovered ' + (video.videoWidth||'?') + 'x' + (video.videoHeight||'?') + ')';
+    CAM.recovering = false;
+    dlog('camera RECOVERED — ' + (video.videoWidth||'?') + 'x' + (video.videoHeight||'?'));
+    flash('CAMERA RECOVERED', '#9fd66a');
+  }catch(e){
+    DBG.stages.camera = 'FAIL on restart — ' + String(e && e.name || e).slice(0,40);
+    dlog('camera restart FAIL — ' + String(e && e.name || e));
+    CAM.recovering = false; CAM.stream = null;
+  }
+}
+function camWatch(){
+  if(!CAM.stream || !video || CAM.recovering) return;
+  const trk = CAM.stream.getTracks()[0];
+  if(!trk || trk.readyState==='ended'){ hangCam('track ended'); return; }
+  const vt = video.currentTime;
+  const repliedAdv = PIPE.replied > (CAM.lastReplied||0); CAM.lastReplied = PIPE.replied;
+  if(!CAM.recovering && CAM.stallN===0 && repliedAdv && lastHandSeenT
+     && performance.now() - lastHandSeenT > 12000 && performance.now() - (CAM.frozenReinitT||0) > 90000){
+    CAM.frozenReinitT = performance.now();
+    dlog('⚠ camera picture suspected FROZEN — clock advancing, worker replying, but no hands for ' + Math.round((performance.now()-lastHandSeenT)/1000) + 's — restarting camera');
+    postLog('CAMERA PICTURE FROZEN — black frames? clock advancing, no hands ' + Math.round((performance.now()-lastHandSeenT)/1000) + 's');
+    hangCam('picture frozen'); return;
+  }
+  if(vt === CAM.lastVT){ if(++CAM.stallN >= 4){ dlog('⚠ VIDEO FRAMES FROZEN at vt=' + vt.toFixed(2) + ' for ' + (CAM.stallN*2) + 's — restarting camera'); postLog('VIDEO FREEZE vt=' + vt.toFixed(2) + ' game=' + state + ' beats=' + (G.ict? G.ict.count : '?') + ' hold=' + (G.hold? 'YES' : 'no')); hangCam('frames frozen'); } else if(CAM.stallN===1) dlog('video currentTime static at ' + vt.toFixed(2) + ' (check ' + CAM.stallN + ')'); }
+  else { CAM.stallN = 0; CAM.lastVT = vt; }
+  // worker silently stuck (detectForVideo never returns): camera alive, no inference for 6s
+  // Baseline = last hands message, or worker-ready time when no result has ever arrived
+  // (latestHands null ≠ stalled — a phone's first frame can take seconds after READY).
+  // THE CIRCLE HANG: a fermata waits for palm-hold + fist-cut; if detection dies mid-hold the
+  // orchestra holds forever = 'hangs at circle'. Auto-cut after hand loss so the piece can continue.
+  if(state===STATE.PLAY && G.hold && !G.hold.autocut){
+    const lost = lastHandSeenT && (performance.now() - lastHandSeenT > 4000);
+    const never = !lastHandSeenT && (performance.now() - (DBG.readyT||0) > 8000);
+    if(lost || never){
+      G.hold.autocut = true;
+      if(G.hold.openFrac < .25) G.hold.openFrac = .5;
+      dlog('⚠ FERMATA auto-cut — ' + (lost? 'hand lost ' + Math.round((performance.now()-lastHandSeenT)/1000) + 's' : 'no hands ever seen') + ' during hold');
+      postLog('FERMATA auto-cut — ' + (lost? 'hand lost during hold' : 'no hands during hold') + ', beats=' + (G.ict? G.ict.count : '?') + ' hold=' + (G.hold? 'YES':'no'));
+      flash('HAND LOST — AUTO-CUT', '#e08040');
+      cutFermata();
+    }
+  }
+  // GPU delegate can be 'ready' yet silently return zero hands forever (blind-GPU failure mode).
+  // 12s of pumping with not ONE detection → swap to CPU. EVER_HAND guards: once any hand is seen, GPU is proven good.
+  if(hworker && LIVE_DELEGATE.d==='GPU' && !EVER_HAND.seen && !BLIND_SWAPPED && PIPE.sent >= 10
+     && performance.now() - (DBG.readyT||0) > 12000){
+    BLIND_SWAPPED = true;                     // fires in EVERY state — Master Class included
+    dlog('⚠ GPU delegate live 12s, ZERO hands ever — swapping to CPU (state ' + state + ')');
+    postLog('GPU BLIND SWAP — 12s pumping, zero detections; CPU takes over (state ' + state + ')');
+    try{ hworker.terminate(); }catch(e){}
+    hworker = null; inflight = false; latestHands = null; workerFatal = false; workerRetries = 0;
+    warmWorker('CPU');
+  }
+  const detBase = latestHands? latestHands.t : (DBG.readyT || performance.now());
+  if(hworker && CAM.stallN===0 && String(DBG.stages.model||'').startsWith('OK') && PIPE.sent >= 5
+     && performance.now() > (DBGLOG.detGrace||0) && performance.now() - detBase > 6000){
+  dlog('⚠ worker STALLED — no detections for 6s — restarting (attempt ' + workerRetries + ')');
+  postLog('WORKER WEDGE — detections died ' + Math.round((performance.now()-detBase)/1000) + 's ago, frames sent ' + PIPE.sent + ' replied ' + PIPE.replied);
+    try{ hworker.terminate(); }catch(e){}
+    hworker = null; inflight = false; latestHands = null; workerFatal = true;
+    DBG.stages.model = 'WORKER STALLED — sync mode';
+    DBG.readyT = 0;
+    flash('TRACKING STALLED — SYNC MODE', '#e08040');
+    if(landmarker){ if(state===STATE.PLAY) runHandLoop(); }
+    else warmWorker('CPU');
+  }
+}
+document.addEventListener('visibilitychange', (ev)=>{ dlog('visibility → ' + document.visibilityState);         // returning from background: check immediately
+  if(document.visibilityState==='visible'){                      // RESUME GRACE: a backgrounded worker/camera needs time to wake;
+    DBGLOG.detGrace = performance.now() + 12000;                 // without it camWatch instantly kills a healthy worker on stale latestHands.t
+    DBGLOG.fpsT = performance.now(); DBGLOG.fpsC = 0;            // fps window reset: never report the hidden gap as 'saturated'
+    dlog('resume — 12s grace before watchdogs judge worker/camera');
+  }
+  if(document.visibilityState==='visible' && CAM.stream && !CAM.recovering){
+    const vt = video? video.currentTime : -1;
+    setTimeout(()=>{
+      if(CAM.stream && !CAM.recovering && video && video.currentTime === vt){ hangCam('after background'); }
+    }, 1600);
+  }
+});
+async function buildSyncLandmarker(){
+  if(landmarker) return true;
+  const MODEL = "https://jarvis-4ab907e4.base44.app/functions/maestroAsset?u=https%3A%2F%2Fstorage.googleapis.com%2Fmediapipe-models%2Fhand_landmarker%2Fhand_landmarker%2Ffloat16%2F1%2Fhand_landmarker.task";
+  try{
+    DBG.stages.model = 'worker dead — sync fallback…';
+    const files = await FilesetResolver.forVisionTasks("https://jarvis-4ab907e4.base44.app/functions/maestroAsset?u=https%3A%2F%2Fcdn.jsdelivr.net%2Fnpm%2F%40mediapipe%2Ftasks-vision%400.10.14%2Fwasm");
+    DBG.stages.wasm = 'OK (sync)';
+    const make = (delegate) => HandLandmarker.createFromOptions(files, {
+      baseOptions:{ modelAssetPath:MODEL, delegate }, numHands:2, runningMode:"VIDEO",
+      minHandDetectionConfidence:.3, minHandPresenceConfidence:.3, minTrackingConfidence:.3
+    });
+    try{ landmarker = await make('CPU'); }            // CPU first — GPU is the flaky path
+    catch(e){ landmarker = await make('GPU'); }
+    DBG.stages.model = 'OK (sync)';
+    return true;
+  }catch(e){ DBG.stages.model = 'FAIL sync — ' + String(e && e.name || e).slice(0,40); return false; }
+}
+let cameraFailTip = '';
+async function retryCamera(){
+  flash('RETRYING CAMERA…', '#f4c960');
+  const ok = await initHand();
+  if(ok){
+    flash('CAMERA BACK — TRACKING LIVE', '#9fd66a');
+    if(state===STATE.PLAY) runHandLoop();
+    // TRAIN mode loop re-arms itself when landmarks arrive
+  }else{
+    const btn = document.getElementById('camRetryBtn');
+    if(btn) btn.style.display='block';
+    flash(cameraFailTip ? cameraFailTip.slice(0,150) : 'CAMERA STILL UNAVAILABLE — TAP MODE', '#e06040');
+  }
+}
+async function initHand(){
+  DBG.stages = { wasm:'…', model:'…', camera:'…' };
+  try{
+    video = document.createElement('video'); video.autoplay=true; video.playsInline=true; video.muted=true;
+    video.setAttribute('playsinline',''); video.setAttribute('webkit-playsinline','');
+    // ?fakecam=1 — UAT mode: synthetic camera from an embedded real hand image.
+    // Runs the game's ENTIRE pipeline (worker, pump, detection, ingest, HUD) without a webcam.
+    if(location.search.indexOf('fakecam')>=0){
+      const fc = document.createElement('canvas'); fc.width=320; fc.height=240;
+      const fx = fc.getContext('2d');
+      const fi = new Image();
+      fi.onload = ()=>{
+        const vanishAt = /fakecam=3/.test(location.search)? 8000 : Infinity;   // UAT: hand disappears mid-game — tests the fermata auto-cut + frozen-picture paths
+        (function draw(){ if(performance.now() - DBGLOG.t0 < vanishAt) fx.drawImage(fi,0,0,320,240); else { fx.fillStyle='#000'; fx.fillRect(0,0,320,240); } fx.fillStyle='rgba(0,0,40,.04)'; fx.fillRect(0,0,320,240); requestAnimationFrame(draw); })();
+      };
+      fi.src = 'data:image/jpeg;base64,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';
+      const fstream = fc.captureStream(30);
+      video.srcObject = fstream; await video.play();
+      bindStream(fstream);
+      DBG.stages.camera = 'OK FAKECAM';
+      const _rb = document.getElementById('camRetryBtn'); if(_rb) _rb.style.display='none';
+      cameraFailTip = '';
+      try{
+        DBG.stages.wasm = '— (worker)';
+        DBG.stages.model = 'warming…';
+        tryWorker(MODEL_URL, 'CPU').then(ok=>{
+          if(ok){ DBG.stages.model = 'OK (worker CPU)'; workerRetries = 0; return; }
+          warmWorker(MOBILE? 'GPU' : 'CPU');
+        });
+      }catch(e){ DBG.stages.model = 'FAIL ' + String(e).slice(0,60); return false; }
+      return true;
+    }
+    if(!video.isConnected){ video.style.cssText='position:fixed;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
+      document.body.insertBefore(video, document.body.firstChild); }
+    // fully-rendered behind the opaque canvas: Chrome reliably decodes visible elements;
+    // hidden/off-screen ones get culled on some mobile builds (frames stop updating)  // detached <video> elements can silently stop decoding new frames on some mobile Chrome builds under memory pressure — DOM-attach it (off-screen, invisible) so decode stays reliable long-session
+    let stream;
+    try{
+      stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia({ video:{facingMode:'user', width:320, height:240} }),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('camera timeout — slow permission?')), 10000))
+      ]);
+    }catch(e){
+      stream = await navigator.mediaDevices.getUserMedia({ video:true });   // plain fallback
+    }
+    video.srcObject = stream; await video.play();
+    bindStream(stream);
+    DBG.stages.camera = 'OK ' + (video.videoWidth||'?') + 'x' + (video.videoHeight||'?');
+    dlog('camera OK — ' + (video.videoWidth||'?') + 'x' + (video.videoHeight||'?') + ' vt=' + video.currentTime.toFixed(2));
+    const _rb = document.getElementById('camRetryBtn'); if(_rb) _rb.style.display='none';
+    cameraFailTip = '';
+  }catch(err){
+    const nm = String(err && err.name || err);
+    let tip = '';
+    if(/NotAllowed|Permission/.test(nm)) tip = 'PERMISSION DENIED — if you opened this from Telegram, open it in Chrome instead (⋮ menu → Open in Chrome). Then tap the lock/ⓘ icon in the address bar → allow Camera → reload.';
+    else if(/NotReadable|TrackStart/.test(nm)) tip = 'CAMERA BUSY — close other apps using the camera (Zoom, camera app), then retry.';
+    else if(/timeout/.test(nm)) tip = 'CAMERA TIMEOUT — the permission prompt may have appeared behind the window; retry and answer it.';
+    else if(/NotFoundError/.test(nm)) tip = 'NO CAMERA FOUND — check the webcam is connected/enabled.';
+    DBG.stages.camera = 'FAIL ' + nm.slice(0,60);
+    dlog('camera FAIL — ' + nm);
+    cameraFailTip = tip;
+    const btn = document.getElementById('camRetryBtn');
+    if(btn){ btn.style.display='block'; btn.onclick = ()=>{ btn.style.display='none'; retryCamera(); }; }
+    if(tip) flash(tip.slice(0,150), '#e06040');
+    return false;
+  }
+  dlog('worker warming — classic, ' + (typeof delegate !== 'undefined' ? delegate : '?') + ' delegate');
+  try{
+    // ONE path for every platform: the model lives ONLY in the worker.
+    // CPU delegate first everywhere — the GPU delegate dies silently on Intel iGPUs
+    // (ThinkPad) and some mobile GPUs: zero detections or hard stalls mid-session.
+    // The sync landmarker is never built at start; if the worker dies it is restarted
+    // off-thread (warmWorker) — main-thread detection is a last-resort that lags.
+    DBG.stages.wasm = '— (worker)';
+    DBG.stages.model = 'warming…';
+    const d0 = FORCE_DELEGATE? FORCE_DELEGATE.toUpperCase() : (MOBILE? 'GPU' : 'CPU');
+    // REALTIME: phones run the GPU delegate (Adreno ≈ 40-80ms vs CPU 200-400ms) — GPU FIRST on mobile,
+    // CPU fallback if init fails or the blind-delegate watchdog swaps it. Desktop stays CPU (Intel iGPU poison).
+    tryWorker(MODEL_URL, d0).then(ok=>{
+      if(ok){ DBG.stages.model = 'OK (worker ' + (LIVE_DELEGATE.d||d0) + ')'; workerRetries = 0; return; }
+      warmWorker(d0==='GPU'? 'CPU' : (MOBILE? 'GPU' : 'CPU'));   // GPU failed → CPU; CPU failed → alternate on phones
+    });
+  }catch(e){ DBG.stages.model = 'FAIL ' + String(e).slice(0,60); return false; }
+  return true;
+}
+
+function openness(pts){
+  // avg (tip - mcp) distance normalized by wrist->mcp of middle finger
+  const wrist=pts[0], mcp=pts[9];
+  const palm = Math.hypot(wrist.x-mcp.x, wrist.y-mcp.y)+1e-5;
+  let s=0; const pairs=[[8,5],[12,9],[16,13],[20,17]];
+  for(const [tip,pi] of pairs) s += Math.hypot(pts[tip].x-pts[pi].x, pts[tip].y-pts[pi].y)/palm;
+  return Math.min(1, Math.max(0, (s/4 - .28)/ .75));
+}
+
+const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+/* ───────────────────────── render loop ───────────────────────── */
+let candles=[]; for(let i=0;i<12;i++) candles.push({x:Math.random(), y:.12+Math.random()*.5, s:.4+Math.random()*.8, p:Math.random()*6.28});
+let sway=0;
+
+function drawFrame(t){
+  // UAT: ?crashtest=1 injects ONE exception mid-game — the loop must survive it
+  if(/crashtest=1/.test(location.search) && !DBG.__crashed && performance.now() > 5000){ DBG.__crashed = 1; throw new Error('UAT crash injection'); }
+  const r = DPR;
+  ctx.clearRect(0,0,W,H);
+  // hall backdrop (cached offscreen — rebuilt only on resize)
+  if(bgCache) ctx.drawImage(bgCache,0,0);
+  else { ctx.fillStyle='#0a0508'; ctx.fillRect(0,0,W,H); }
+
+  // video (mirrored, dim)
+  if(video && video.readyState>=2){
+    ctx.save(); ctx.globalAlpha=.22; ctx.translate(W,0); ctx.scale(-1,1);
+    const vw=video.videoWidth, vh=video.videoHeight, s=Math.max(W/vw,H/vh);
+    ctx.drawImage(video,(W-vw*s)/2,(H-vh*s)/2,vw*s,vh*s); ctx.restore();
+  }
+  // candles (flat fills, flicker via alpha only)
+  for(const c of candles){
+    const x=c.x*W, y=c.y*H, f=.7+.3*Math.sin(t*.006*c.s+c.p);
+    ctx.fillStyle=`rgba(255,170,60,${.16*f})`;
+    ctx.beginPath(); ctx.arc(x,y,60*c.s,0,6.28); ctx.fill();
+    ctx.fillStyle=`rgba(255,200,110,${.5*f})`;
+    ctx.beginPath(); ctx.arc(x,y,14*c.s,0,6.28); ctx.fill();
+  }
+
+  // section labels — dark sections wait for your cue
+  ctx.font=`${Math.round(10*DPR)}px monospace`; ctx.textAlign='center';
+  const secLive = (sec)=> state!==STATE.PLAY || !G.cues || G.cues.some(c=>c.sec===sec && c.done);
+  for(const s of SECTIONS){
+    ctx.globalAlpha = secLive(s)? 1 : .30;
+    ctx.fillStyle = s.col; ctx.fillText(s.name, W*s.x, H*.16);
+    ctx.globalAlpha = 1;
+  }
+  // orchestra silhouettes
+  ctx.fillStyle='rgba(8,4,6,.9)';
+  for(let i=0;i<9;i++){
+    const bx = W*(.08+.84*i/8), by=H*.72;
+    const off = Math.sin(sway*.5+i)*6;
+    ctx.beginPath(); ctx.ellipse(bx+off, by, W*.036, H*.11, 0, 0, 6.28); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx+off, by-H*.09, W*.016, 0, 6.28); ctx.fill();
+  }
+  if(state===3){ drawCal(t); updateHUD(); requestAnimationFrame(draw); return; }
+  if(state===STATE.TRAIN){ drawTrain(t); updateHUD(); requestAnimationFrame(draw); return; }
+  if(state===STATE.PLAY){
+    const nowS = performance.now()/1000, s = songNow();
+    const dtF = Math.min(.08, nowS - (G._lastF||nowS)); G._lastF = nowS;
+    processCues(dtF);
+    processFermatas(dtF);
+    // the orchestra WAITS when you stop conducting — tension climbs till you resume
+    if(!G.hold && G.ict.count >= 0 && nowS - G.ict.last > Math.max(1.4, (G.ict.med||.8)*1.9)){
+      if(!G.wait){ G.wait = true; flash('THE ORCHESTRA WAITS…', '#e08040'); }
+      G.tension = Math.min(100, G.tension + 10*dtF);
+    }
+    if(G.tension>=100){ endGame(true); }
+    // ── conducting pattern: YOUR beat drives the dot (no fixed clock)
+    if(G.ict){
+      const B = G.ict;
+      const bpR = ((B.count%4)+4)%4 + Math.min(1, (nowS - B.last)/Math.max(.2, B.med||.8));
+      const bp = isFinite(bpR) && bpR>=0? bpR : 0;            // NaN/undefined beat math must never kill the draw
+      const i0 = Math.floor(bp)%4, fr = bp - Math.floor(bp);
+      const A = PAT[i0] || PAT[0], Bp = PAT[(i0+1)%4] || PAT[1];
+      const dx = (A[0]+(Bp[0]-A[0])*fr)*W, dy2 = (A[1]+(Bp[1]-A[1])*fr)*H;
+      ctx.strokeStyle = 'rgba(244,201,96,.16)'; ctx.lineWidth = 2; ctx.setLineDash([6,10]);
+      ctx.beginPath();
+      PAT.forEach((pt,i)=>{ const px=pt[0]*W, py=pt[1]*H; i? ctx.lineTo(px,py) : ctx.moveTo(px,py); });
+      ctx.stroke(); ctx.setLineDash([]);
+      PAT.forEach((pt,i)=>{ ctx.fillStyle = i===(B.count%4)? 'rgba(244,201,96,.9)' : 'rgba(244,201,96,.18)';
+        ctx.beginPath(); ctx.arc(pt[0]*W, pt[1]*H, 7*DPR, 0, 6.28); ctx.fill(); });
+      const pulse = G.wait? .6+.4*Math.sin(nowS*9) : 1;
+      ctx.fillStyle = G.wait? `rgba(208,86,86,${pulse})` : '#ffd970';
+      ctx.beginPath(); ctx.arc(dx, dy2, 16*DPR, 0, 6.28); ctx.fill();
+      ctx.fillStyle='#b89b6a'; ctx.font=`bold ${Math.round(13*DPR)}px monospace`; ctx.textAlign='center';
+      ctx.fillText((B.count<0? 'FIRST STROKE STARTS' : (B.bpm? '♩='+B.bpm : '')) + (G.wait? '  ·  THE ORCHESTRA WAITS — CONDUCT!' : ''), W/2, H*.22);
+    }
+    // ── section strip: lit = playing, pulsing = waiting for YOUR cue
+    SECTIONS.forEach((sec, i)=>{
+      const c = (G.cues||[]).find(x=>x.sec===sec);
+      const on = G.secOn && G.secOn[i];
+      const win = c && !c.done && c.window;
+      const x = W*sec.x, y = H*.80;
+      ctx.globalAlpha = on? 1 : win? .85 : .35;
+      ctx.strokeStyle = win? sec.col : (on? sec.col : '#5a4630');
+      ctx.lineWidth = win? 4 : 2;
+      if(win) ctx.strokeStyle = `rgba(${sec.col==='#f4c960'?'244,201,96':sec.col==='#7ec8b4'?'126,200,180':sec.col==='#e08a4a'?'224,138,74':'208,86,86'},${.5+.5*Math.sin(nowS*8)})`;
+      ctx.strokeRect(x-50*DPR, y-26*DPR, 100*DPR, 52*DPR);
+      ctx.fillStyle = on? sec.col : '#8d7a5c'; ctx.font=`bold ${Math.round(13*DPR)}px monospace`;
+      ctx.fillText(sec.name, x, y+5*DPR);
+      if(win && !on){ ctx.fillStyle='#f4c960'; ctx.font=`${Math.round(11*DPR)}px monospace`;
+        ctx.fillText('CUE — POINT ' + (sec.x<.5? '◀':'▶'), x, y-38*DPR); }
+      ctx.globalAlpha = 1;
+    });
+    // ── fermata hold: sustain + cut prompt
+    if(G.hold){
+      const f = G.hold;
+      ctx.strokeStyle = 'rgba(255,217,112,.9)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(W/2, H*.42, (70 + 6*Math.sin(nowS*6))*DPR, 0, 6.28); ctx.stroke();
+      ctx.strokeStyle = '#9fd66a'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(W/2, H*.42, 84*DPR, -1.57, -1.57 + 6.28*Math.min(1, f.openFrac/1.0)); ctx.stroke();
+      ctx.fillStyle = '#ffd970'; ctx.font=`bold ${Math.round(15*DPR)}px monospace`; ctx.textAlign='center';
+      ctx.fillText(f.openFrac > .35? 'DROP + FIST — CUT!' : 'FERMATA — HOLD PALM OPEN', W/2, H*.42 - 100*DPR);
+    }
+    // ── cue prompts near top
+    if(G.cues) for(const c of G.cues){
+      if(!c.window) continue;
+      const cx2 = W*c.sec.x, cy2 = H*.30;
+      ctx.globalAlpha = .6 + .4*Math.sin(nowS*8);
+      ctx.fillStyle = c.sec.col; ctx.font = `bold ${Math.round(13*DPR)}px monospace`; ctx.textAlign = 'center';
+      ctx.fillText('CUE — POINT ' + (c.sec.x < .5? '◀' : '▶'), cx2, cy2);
+      ctx.font = `${Math.round(11*DPR)}px monospace`;
+      ctx.fillText(c.sec.name + (c.dwell > 0? ' ·…' : ''), cx2, cy2 + 18*DPR);
+      ctx.globalAlpha = 1;
+    }
+    // dynamics meter — your free hand's height, live
+    {
+      const dH = H*.30, dY = H*.32, dX = W*.955;
+      ctx.fillStyle = 'rgba(232,220,200,.12)'; ctx.fillRect(dX, dY, 8*DPR, dH);
+      ctx.fillStyle = '#7ec8b4'; ctx.fillRect(dX, dY + dH*(1-G.dyn), 8*DPR, dH*G.dyn);
+      ctx.fillStyle = '#b89b6a'; ctx.font = `bold ${Math.round(11*DPR)}px monospace`; ctx.textAlign = 'right';
+      ctx.fillText(['pp','p','mf','f','ff'][Math.min(4, Math.floor(G.dyn*5))], dX - 5*DPR, dY + dH*(1-G.dyn) + 4*DPR);
+      ctx.textAlign = 'center';
+    }
+    // hit bursts
+    G.bursts = G.bursts.filter(bu => nowS - bu.at < .5);
+    for(const bu of G.bursts){
+      const k = (nowS - bu.at)/.5;
+      const col = {perfect:'255,217,112',good:'159,214,106',ok:'201,180,138'}[bu.grade];
+      ctx.strokeStyle = `rgba(${col},${1-k})`;
+      ctx.lineWidth = 5*(1-k)+1;
+      ctx.beginPath(); ctx.arc(bu.x,bu.y, 30 + k*90, 0, 6.28); ctx.stroke();
+      ctx.fillStyle = `rgba(${col},${(1-k)*.25})`;
+      ctx.beginPath(); ctx.arc(bu.x,bu.y, 30+k*60, 0, 6.28); ctx.fill();
+    }
+
+    // end of performance — after your final beat
+    if(G.endAt && nowS > G.endAt){ dlog('FINALE firing now (endAt=' + G.endAt.toFixed(1) + ')'); endGame(); }
+
+    // hand skeletons — gold = BATON, cyan = FREE (expression hand)
+    for(const [h, lab, col] of [[G.batonHand, 'BATON', 'rgba(244,201,96,.9)'], [G.freeHand, 'FREE', 'rgba(126,200,180,.9)']]){
+      if(!h) continue;
+      for(const [a,b] of HAND_CONNECTIONS){
+        const p=h.pts[a], q=h.pts[b];
+        ctx.strokeStyle = col; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo((1-p.x)*W,p.y*H); ctx.lineTo((1-q.x)*W,q.y*H); ctx.stroke();
+      }
+      for(const p of h.pts){ ctx.fillStyle='rgba(255,230,180,.9)'; ctx.beginPath(); ctx.arc((1-p.x)*W,p.y*H,4,0,6.28); ctx.fill(); }
+      ctx.fillStyle = col; ctx.font = `bold ${Math.round(11*DPR)}px monospace`; ctx.textAlign='center';
+      ctx.fillText(lab, h.palmX, h.palmY - 36*DPR);
+    }
+  }
+  sway += .02;
+  dlogFps();
+  updateHUD();
+  requestAnimationFrame(draw);
+}
+function draw(t){                  // CRASH ARMOR: an exception costs ONE frame + a report — never the game
+  try{ drawFrame(t); }
+  catch(e){
+    DBG.crashN = (DBG.crashN||0) + 1;
+    dlog('⚠ DRAW EXCEPTION #' + DBG.crashN + ' — ' + String(e && e.message || e).slice(0,90) + ' — loop survived');
+    if(DBG.crashN <= 3) postLog('draw exception: ' + String(e && e.message || e).slice(0,80) + ' — SURVIVED #' + DBG.crashN + (e && e.stack? ' | ' + String(e.stack).split('\n').slice(1,3).join(' / ').slice(0,160) : ''));
+    requestAnimationFrame(draw);   // the show must go on
+  }
+}
+
+const hud=document.getElementById('hud'), comboEl=document.getElementById('combo'), statusEl=document.getElementById('status');
+dlog('boot — ' + (navigator.userAgent.match(/Android|iPhone|iPad|Mobile/i)? 'mobile' : 'desktop') + (location.search.indexOf('fakecam')>=0? ' FAKECAM' : ''));
+if(location.search.indexOf('log=1')>=0){
+  const lw = document.getElementById('logwrap'); lw.style.display='block';
+  // COLLAPSED BY DEFAULT — a fixed 42%-height panel used to cover the menu buttons and eat
+  // every click ("clicking does nothing"). Tap the header to expand/collapse.
+  let logBig = false;
+  document.getElementById('loghead').addEventListener('click', (ev)=>{
+    if(ev.target.id === 'logCopy') return;          // COPY LOG keeps its own handler
+    logBig = !logBig;
+    lw.style.height = logBig? '42%' : '60px';
+    document.getElementById('logChev').textContent = logBig? '▼ tap to collapse' : '▲ tap to expand';
+  });
+}
+document.getElementById('logCopy').onclick = ()=>{
+  const txt = DBGLOG.buf.join('\n');
+  navigator.clipboard && navigator.clipboard.writeText(txt).then(()=>{ dlog('log copied to clipboard — paste it to Jarvis'); })
+    .catch(()=>{ const ta=document.createElement('textarea'); ta.value=txt; ta.style.cssText='position:fixed;inset:0;z-index:99'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); dlog('log copied (fallback)'); });
+};
+function updateHUD(){
+  const handsN = latestHands? latestHands.landmarks.length : 0;
+  if(state===3){ hud.innerHTML='CALIBRATION SUITE — ' + (CALIB? CAL_STAGES[Math.min(CALIB.stage,5)].title : '') + ' · hands ' + handsN + ' · s' + PIPE.sent + '/r' + PIPE.replied; comboEl.textContent=''; statusEl.innerHTML=''; return; }
+  if(state!==STATE.PLAY){ hud.innerHTML=''; return; }
+  const cnt = Math.max(0, G.ict? G.ict.count+1 : 0);
+  const bar = Math.min(SC.length, Math.floor(cnt/4)+1), beat = ((cnt-1)%4)+1 || 1;
+  hud.innerHTML = `Bar <b>${bar}</b>/${SC.length} · Beat <b>${Math.min(4,beat)}</b>/4<br>Score <b>${G.score}</b> · ♩=${G.ict? (G.ict.bpm||BPM) : BPM}${G.wait? ' · <b>WAITING</b>':''} · dyn ${['pp','p','mf','f','ff'][Math.min(4,Math.floor(G.dyn*5))]}${(landmarker||hworker)? ` · lag ${DBG.inf||'?'}ms · hands ${handsN} · s${PIPE.sent}/r${PIPE.replied}`:''}`;
+  comboEl.textContent = G.combo>=3? 'COMBO x'+G.combo : '';
+  const ten = Math.round(G.tension);
+  statusEl.innerHTML = `Hall tension ${'▮'.repeat(Math.round(ten/10))}${'▯'.repeat(10-Math.round(ten/10))}`;
+  statusEl.style.color = ten>60? '#e06040' : '#b89b6a';
+}
+
+/* ───────────────────────── start ───────────────────────── */
+let started = false;
+let BPM_SEL = 72;
+for(const [id,b] of [['t72',72],['t108',108]]){
+  document.getElementById(id).addEventListener('click', ()=>{
+    BPM_SEL = b;
+    document.getElementById('t72').classList.toggle('sel', b===72);
+    document.getElementById('t108').classList.toggle('sel', b===108);
+  });
+}
+(function(){                                  // UAT probe: ?probe=1 — warms worker, reports result, no camera needed
+  if(!/[?&]probe=1/.test(location.search)) return;
+  const w = document.getElementById('warn'); w.style.display='block';
+  w.textContent = 'PROBE: warming worker…';
+  tryWorker(MODEL_URL, 'CPU').then(ok=>{
+    w.textContent = ok ? 'PROBE OK — worker model loaded (classic worker)' : 'PROBE FAIL — worker init failed';
+  });
+})();
+document.getElementById('startBtn').addEventListener('click', async ()=>{
+  if(started) return; started = true;
+  document.getElementById('startBtn').disabled = true;
+  const warn = document.getElementById('warn');
+  warn.style.display='block'; warn.textContent='Summoning the hall…';
+  initAudio();
+  const ok = await initHand();
+  document.getElementById('overlay').style.display='none';
+  if(!ok){ flash('TAP / SPACE MODE', '#c9b48a'); }
+  setTempo(BPM_SEL);
+  buildTargets();
+  if(AC && secGain){ secGain.forEach((g,i)=>{ try{ g.gain.setTargetAtTime(i===0? 1:0, AC.currentTime, .02); }catch(e){} }); }   // strings with you, rest dark until cued
+  state = STATE.PLAY;
+  flash(ok? 'CONDUCT — YOUR FIRST STROKE STARTS THE PERFORMANCE' : 'TAP MODE — EACH TAP IS A BEAT', '#f4c960');
+  runHandLoop();
+  if(/fakecam=[23]/.test(location.search)){                         // UAT: scripted strokes through the whole score incl. fermata + finale
+    const noFermScript = /fakecam=3/.test(location.search);        // fakecam=3: script does NOT cut fermatas — exercises the auto-cut-on-hand-loss path
+    dlog('UAT scripted strokes ON (fakecam=' + (noFermScript? '3, no script fermata cut' : '2') + ')');
+    G.wait = false;
+    const iv = setInterval(()=>{
+      if(state!==STATE.PLAY){ clearInterval(iv); return; }
+      if(G.hold && !noFermScript){ fermataTap(); }                 // cut the fermata after a hold (unless testing the auto-cut path)
+      ictusNow((CAL.start||1.7)*2.2);
+    }, 620);
+  }
+});
+
+/* ───────────────────────── MASTER CLASS (training) ───────────────────────── */
+let TRAIN = null;
+let TRAINDONE = [];
+try{ TRAINDONE = JSON.parse(localStorage.getItem('maestro_train')||'[]'); }catch(e){}
+function saveTrain(){ try{ localStorage.setItem('maestro_train', JSON.stringify(TRAINDONE)); }catch(e){} }
+const LESSONS = [
+  { id:'tempo',    title:'TEMPO — THE BATON',        desc:'Right hand strokes DOWN exactly as the ring closes. Land 6 on-beat strokes.' },
+  { id:'accent',   title:'ACCENTS — STRONG BEATS',   desc:'Same beat — now SNAP it. Peak velocity above the bar = accent. Land 3.' },
+  { id:'cue',      title:'CUES — BRING THEM IN',     desc:'Point your LEFT index finger at the lit section and hold. Cue all 4 sections in.' },
+  { id:'fermata',  title:'FERMATA — HOLD & CUT',     desc:'Open palm HELD through the sustained chord, then DROP + close FIST as the ring closes.' },
+  { id:'dynamics', title:'DYNAMICS — FORTE & PIANO', desc:'Raise your palm to ff, hold; then lower to pp, hold. The orchestra follows your hand.' },
+];
+function initLesson(){
+  TRAIN.phase = 'active';
+  TRAIN.pips = 0; TRAIN.cueIdx = 0; TRAIN.dwell = 0; TRAIN.dynV = .55; TRAIN.aim = null;
+  TRAIN.ferm = { phase:0, t0:performance.now()/1000, openFrac:0, relT:0 };
+  TRAIN.dyn = { stage:'ff', hold:0 };
+  TRAIN.nextBeat = performance.now()/1000 + 2.0;
+  TRAIN.lastBeatT = TRAIN.nextBeat;
+}
+function lessonPass(){
+  TRAINDONE[TRAIN.li] = true; saveTrain();
+  TRAIN.phase = 'passed'; TRAIN.tPass = performance.now()/1000;
+  flash('PASS ✓', '#9fd66a');
+}
+function click(t){                       // metronome tick
+  if(!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine'; o.frequency.value = 1100;
+  g.gain.setValueAtTime(.4, t); g.gain.exponentialRampToValueAtTime(.0001, t+.10);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+.14);
+}
+function trainStroke(peak){
+  if(TRAIN.phase !== 'active') return;
+  const s = performance.now()/1000;
+  const near = Math.abs(s-TRAIN.lastBeatT) < Math.abs(s-TRAIN.nextBeat)? TRAIN.lastBeatT : TRAIN.nextBeat;
+  const err = s - near;
+  if(Math.abs(err) > .30){ flash('OFF BEAT — watch the ring', '#e08040'); return; }
+  const id = LESSONS[TRAIN.li].id;
+  const realHand = TRAIN.lastHandAt && (performance.now() - TRAIN.lastHandAt < 1500);
+  if(id === 'tempo'){
+    if(realHand){ LEARN.tBias = LEARN.tBias*.85 + err*.15; saveLearn(); }   // LEARN: systematic early/late
+    TRAIN.pips++; flash('ON BEAT', '#9fd66a');
+    if(TRAIN.pips >= 6) lessonPass();
+  } else if(id === 'accent'){
+    if(peak && peak > CAL.start*Math.max(1.45, LEARN.accentX)){
+      if(realHand){ const x = Math.min(2.2, Math.max(1.35, peak/CAL.start));   // LEARN: personal snap strength
+        LEARN.accentX = LEARN.accentX*.7 + x*.3; saveLearn(); }
+      TRAIN.pips++; flash('ACCENT!', '#ff9a56');
+      if(TRAIN.pips >= 3) lessonPass();
+    } else flash('on beat — now SHARPER', '#f4c960');
+  }
+}
+function trainTap(nx, ny){
+  if(state !== STATE.TRAIN || !TRAIN) return;
+  if(TRAIN.phase === 'complete'){ location.reload(); return; }
+  if(TRAIN.phase !== 'active') return;
+  const cam = TRAIN.lastHandAt && (performance.now() - TRAIN.lastHandAt < 1500);
+  const s = performance.now()/1000, id = LESSONS[TRAIN.li].id;
+  if(id === 'tempo' || id === 'accent'){ trainStroke(CAL.start*2); }
+  else if(id === 'cue' && !cam){
+    let best = 0, bd = 9;
+    SECTIONS.forEach((sec, i)=>{ const d = Math.abs(nx - sec.x); if(d < bd){ bd = d; best = i; } });
+    if(best === TRAIN.cueIdx){
+      TRAIN.cueIdx++; flash(SECTIONS[best].name + ' IN', SECTIONS[best].col);
+      if(TRAIN.cueIdx >= 4) lessonPass();
+    }
+  }
+  else if(id === 'fermata'){
+    const F = TRAIN.ferm;
+    if(F.phase === 2 && Math.abs(s - F.relT) < .25){ flash('FERMATA — CUT!', '#ffd970'); lessonPass(); }
+  }
+  else if(id === 'dynamics' && !cam){
+    const D = TRAIN.dyn;
+    if(D.stage === 'ff'){ D.stage = 'pp'; flash('FORTE ✓ — now lower', '#7ec8b4'); }
+    else { flash('PIANO ✓', '#7ec8b4'); lessonPass(); }
+  }
+}
+document.getElementById('tMenu').addEventListener('click', ()=>{ if(state===STATE.TRAIN) location.reload(); });
+document.getElementById('tSkip').addEventListener('click', ()=>{
+  if(state!==STATE.TRAIN || !TRAIN) return;
+  TRAIN.li++;
+  if(TRAIN.li >= LESSONS.length){ TRAIN.phase = 'complete'; saveTrain(); }
+  else initLesson();
+});
+document.getElementById('trainBtn').addEventListener('click', async ()=>{
+  const warn = document.getElementById('warn');
+  warn.style.display = 'block'; warn.textContent = 'Starting camera…';
+  document.getElementById('overlay').style.display = 'none';
+  if(!AC) initAudio();
+  if(secGain) secGain.forEach(g=>{ try{ g.gain.setTargetAtTime(1, AC.currentTime, .05); }catch(e){} });   // audible while training
+  state = STATE.TRAIN;
+  document.getElementById('trainUI').style.display = 'block';
+  TRAIN = { li:0, phase:'active', lastT:0, lastHandAt:0, tPass:0 };
+  initLesson();
+  if(!landmarker && !hworker){
+    const ok = await initHand();
+    if(!ok) flash('TAP MODE — follow along with taps / SPACE', '#c9b48a');
+  }
+  runTrainLoop();
+});
+let lastTrainPtr = 0;
+addEventListener('pointerdown', e=>{
+  if(state!==STATE.TRAIN || !TRAIN || e.target.tagName==='BUTTON') return;
+  lastTrainPtr = Date.now();
+  trainTap(e.clientX/innerWidth, e.clientY/innerHeight);
+});
+addEventListener('click', e=>{                        // some environments only deliver click
+  if(state!==STATE.TRAIN || !TRAIN || e.target.tagName==='BUTTON') return;
+  if(Date.now() - lastTrainPtr < 500) return;         // dedupe: pointerdown already handled it
+  trainTap(e.clientX/innerWidth, e.clientY/innerHeight);
+});
+addEventListener('keydown', e=>{ if(state===STATE.TRAIN){
+  if(e.code==='Escape') location.reload();
+  if(e.code==='Space'){ e.preventDefault(); trainTap(.5,.5); }
+  if(e.code==='KeyS'){                                  // skip lesson (no credit) — for stuck learners
+    TRAIN.li++;
+    if(TRAIN.li >= LESSONS.length){ TRAIN.phase = 'complete'; saveTrain(); }
+    else initLesson();
+  }
+} });
+
+function runTrainLoop(){
+  const loopFrame = ()=>{
+    if(state !== STATE.TRAIN) return;
+    const s = performance.now()/1000;
+    const dt = Math.min(.08, s - (TRAIN.lastF || s)); TRAIN.lastF = s;
+    // ── sample hands
+    let sample = null;
+    if(hworker){
+      if(latestHands && latestHands.t !== TRAIN.lastT){
+        TRAIN.lastT = latestHands.t;
+        sample = latestHands.landmarks;
+      }
+    } else if(landmarker && video && video.readyState >= 2){
+      const now = performance.now();                               // ms clock — the old code mixed seconds with ms
+      if(now - (TRAIN.syncLast||0) > (DBG.cad||55)){               // thresholds so it was detecting once per 30-55s
+        TRAIN.syncLast = now;
+        const t0 = performance.now();
+        try{ const res = landmarker.detectForVideo(video, t0); sample = res && res.landmarks; }catch(e){}
+        const inf = performance.now() - t0;                         // adaptive cadence — same as play mode:
+        DBG.inf = Math.round(DBG.inf ? DBG.inf*.8 + inf*.2 : inf);  // measured inference throttles the next detect
+        DBG.cad = Math.min(55, Math.max(35, (DBG.inf||0) + 12));
+      }
+    }
+    DBG.det = DBG.det || {y:0,n:0};
+    if(sample && sample.length){ DBG.det.y++;
+      const mk = pts=>({ pts, open:openness(pts),
+        palmX:(1-(pts[0].x+pts[5].x+pts[17].x)/3)*W,
+        y:(pts[0].y+pts[5].y+pts[17].y)/3,
+        tipX:(1-pts[8].x)*W, tipY:pts[8].y*H,
+        pointing: Math.hypot(pts[8].x-pts[0].x, pts[8].y-pts[0].y) > Math.hypot(pts[12].x-pts[0].x, pts[12].y-pts[0].y)*1.15 });
+      const hands = sample.slice(0,2).map(mk);
+      if(hands.length === 1){ G.batonHand = hands[0]; G.freeHand = null; }
+      else {
+        G.batonHand = hands.reduce((a,b)=> (a.label==='Right')? a : (b.label==='Right'? b : (a.palmX>b.palmX? a : b)));
+        G.freeHand  = hands.find(h=>h!==G.batonHand) || null;
+      }
+      TRAIN.lastHandAt = performance.now();
+    } else { DBG.det.n++; }
+    if(TRAIN.phase !== 'active'){ if(TRAIN.phase==='passed' && s-TRAIN.tPass>1.6){ if(TRAIN.li<4){ TRAIN.li++; initLesson(); } else TRAIN.phase='complete'; } requestAnimationFrame(loop); return; }
+    const id = LESSONS[TRAIN.li].id;
+    // ── metronome lessons
+    if(id === 'tempo' || id === 'accent'){
+      while(s >= TRAIN.nextBeat){ if(AC) click(AC.currentTime+.01); TRAIN.lastBeatT = TRAIN.nextBeat; TRAIN.nextBeat += 1.0; }
+      if(G.batonHand){
+        const st = HS_pool[0];
+        const nowMs = performance.now();                            // ms clock — ingestLandmarks uses ms; seconds here
+        if(st.lastCY !== null){                                    // wrecked the velocity EMA (1000x time constant)
+          const dtt = Math.max(1, nowMs - st.lastCT);
+          const vy = (G.batonHand.y - st.lastCY)/dtt*1000;
+          const a = 1 - Math.exp(-dtt/80);
+          st.vyS = st.vyS*(1-a) + vy*a;
+          if(st.phase === 'armed' && st.vyS > CAL.start) st.phase = 'down';
+          if(st.phase === 'down') st.peak = Math.max(st.peak||0, st.vyS);
+          if(st.phase === 'down' && st.vyS < CAL.bottom){ st.phase = 'armed'; trainStroke(st.peak); st.peak = 0; }
+        }
+        st.lastCY = G.batonHand.y; st.lastCT = nowMs;
+      }
+    }
+    // ── cue lesson
+    if(id === 'cue'){
+      const tgt = SECTIONS[TRAIN.cueIdx];
+      // ANY pointing hand counts — raising only the left hand used to be treated as the baton
+      // hand and silently ignored; aim = index FINGERTIP (the palm-centre test missed the
+      // natural point-at-the-box gesture)
+      const cand = [G.freeHand, G.batonHand].filter(Boolean).filter(h=>h.pointing)
+        .sort((a,b)=>Math.abs(a.tipX/W - tgt.x) - Math.abs(b.tipX/W - tgt.x))[0];
+      TRAIN.aim = cand? { x:cand.tipX, y:cand.tipY, on:Math.abs(cand.tipX/W - tgt.x) < .15 } : null;
+      if(cand && TRAIN.aim.on){
+        TRAIN.dwell += dt;
+        if(TRAIN.dwell > .30){
+          TRAIN.dwell = 0; TRAIN.cueIdx++;
+          flash(tgt.name + ' IN', tgt.col);
+          if(TRAIN.cueIdx >= 4) lessonPass();
+        }
+      } else TRAIN.dwell = Math.max(0, TRAIN.dwell - dt*2);
+    }
+    // ── fermata lesson
+    if(id === 'fermata'){
+      const F = TRAIN.ferm, h = G.freeHand || G.batonHand;
+      if(F.phase === 0 && s - F.t0 > .8){
+        F.phase = 1; F.t0 = s; F.openFrac = 0;
+        if(AC){ playNote(N('C',5), AC.currentTime+.02, 2.0, 'b', .8); playNote(N('G',4), AC.currentTime+.02, 2.0, 's', .7); playNote(N('C',4), AC.currentTime+.02, 2.0, 's', .6); }
+      }
+      if(F.phase === 1){
+        if(h && h.open > .5) F.openFrac += dt;
+        if(s - F.t0 > 2.0){ F.phase = 2; F.relT = s + .8; }
+      }
+      if(F.phase === 2){
+        if(h && h.open < .3 && Math.abs(s - F.relT) < .25 && F.openFrac > 1.0){ flash('FERMATA — CUT!', '#ffd970'); lessonPass(); }
+        else if(s > F.relT + .4){ flash('HOLD the palm, then CUT on the ring', '#e08040'); F.phase = 0; F.t0 = s; }
+      }
+    }
+    // ── dynamics lesson
+    if(id === 'dynamics'){
+      const dh = G.freeHand || G.batonHand;
+      if(dh){
+        const tgt = Math.max(0, Math.min(1, (0.80 - dh.y)/0.45));
+        TRAIN.dynV += (tgt - TRAIN.dynV)*.18;
+      }
+      const D = TRAIN.dyn;
+      if(D.stage === 'ff'){
+        if(TRAIN.dynV > .72){ D.hold += dt; if(D.hold > 1){ D.stage = 'pp'; D.hold = 0;
+          if(G.freeHand){ LEARN.dynHi = G.freeHand.y; saveLearn(); }          // LEARN: personal ff palm height
+          flash('FORTE ✓ — now lower', '#7ec8b4'); } }
+        else D.hold = Math.max(0, D.hold - dt);
+      } else {
+        if(TRAIN.dynV < .28){ D.hold += dt; if(D.hold > 1){
+          if(G.freeHand){ LEARN.dynLo = G.freeHand.y; saveLearn(); }          // LEARN: personal pp palm height
+          flash('PIANO ✓', '#7ec8b4'); lessonPass(); } }
+        else D.hold = Math.max(0, D.hold - dt);
+      }
+    }
+    requestAnimationFrame(loop);
+  };
+  const loop = ()=>{ try{ loopFrame(); }catch(e){ dlog('⚠ LOOP EXCEPTION — ' + String(e && e.message || e).slice(0,90) + ' — survived'); requestAnimationFrame(loop); } };
+  requestAnimationFrame(loop);
+}
+
+function drawTrain(t){
+  const L = LESSONS[TRAIN.li] || { title:'MASTER CLASS', desc:'' };   // SKIP past lesson 5 exhausts lessons[] (crash fix) — keep rendering so the completion overlay below still draws
+  const s = performance.now()/1000;
+  ctx.fillStyle = 'rgba(4,2,6,.92)'; ctx.fillRect(0,0,W,H);
+  if(video && video.readyState>=2){          // every frame, like calibration — the skip-on-slow-detect
+    ctx.save(); ctx.globalAlpha=.32; ctx.translate(W,0); ctx.scale(-1,1);   // version flashed at half framerate
+    const vw=video.videoWidth, vh=video.videoHeight, sc=Math.max(W/vw,H/vh);
+    ctx.drawImage(video,(W-vw*sc)/2,(H-vh*sc)/2,vw*sc,vh*sc); ctx.restore();
+  }
+  // hands
+  for(const [h, lab, col] of [[G.batonHand,'BATON','rgba(244,201,96,.9)'],[G.freeHand,'FREE','rgba(126,200,180,.9)']]){
+    if(!h) continue;
+    for(const [a,b] of HAND_CONNECTIONS){
+      const p=h.pts[a], q=h.pts[b];
+      ctx.strokeStyle=col; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo((1-p.x)*W,p.y*H); ctx.lineTo((1-q.x)*W,q.y*H); ctx.stroke();
+    }
+    ctx.fillStyle=col; ctx.font=`bold ${Math.round(11*DPR)}px monospace`; ctx.textAlign='center';
+    ctx.fillText(lab, h.palmX, (h.y)*H - 36*DPR);
+  }
+  ctx.textAlign='center';
+  ctx.fillStyle='#f4c960'; ctx.font=`${Math.round(22*DPR)}px Georgia`;
+  ctx.fillText(`${Math.min(TRAIN.li+1, LESSONS.length)}/5 · ${L.title}`, W/2, H*.08);
+  ctx.fillStyle='#b89b6a'; ctx.font=`${Math.round(14*DPR)}px Georgia`;
+  ctx.fillText(L.desc, W/2, H*.125);
+  // NO HAND SEEN — same live banner as calibration
+  if(!landmarker && !hworker && String(DBG.stages.model||'').startsWith('warming')){ } else if((landmarker || hworker) && performance.now() - (TRAIN.lastHandAt||0) > 2000){
+    ctx.fillStyle = '#e06040';
+    ctx.font=`bold ${Math.round(16*DPR)}px Georgia`;
+    ctx.fillText('NO HAND SEEN', W/2, H*.20);
+  }
+  // diagnostics checklist — identical panel to calibration (WASM/MODEL/CAMERA + frame counter)
+  ctx.textAlign='left'; ctx.font=`${Math.round(12*DPR)}px monospace`;
+  let sy = H*.30; const stag = DBG.stages || {};
+  for(const [k,v] of [ ['WASM', stag.wasm], ['MODEL', stag.model], ['CAMERA', stag.camera] ]){
+    const good = String(v).startsWith('OK');
+    ctx.fillStyle = v===undefined? '#666' : good? '#9fd66a' : (String(v)==='…'? '#f4c960' : '#e06040');
+    ctx.fillText(k.padEnd(7,' ') + (v || '—'), W*.06, sy); sy += H*.045;
+  }
+  const dfr = DBG.det || {y:0,n:0};
+  ctx.fillStyle = dfr.y===0 && dfr.n>20 ? '#e06040' : '#b89b6a';
+  ctx.fillText('FRAMES  hand:' + dfr.y + ' empty:' + dfr.n, W*.06, sy); sy += H*.045;
+  ctx.fillStyle = '#e06040';
+  ctx.fillText((DBG.err||'').slice(0,60), W*.06, sy);
+  ctx.textAlign='center';
+  const id = L.id;
+  if(id==='tempo' || id==='accent'){
+    const dtb = TRAIN.nextBeat - s;
+    if(dtb > 0 && dtb < 1){
+      const prog = dtb;
+      ctx.strokeStyle='rgba(244,201,96,.9)'; ctx.lineWidth=5;
+      ctx.beginPath(); ctx.arc(W/2, H*.45, (14 + 60*prog)*DPR, 0, 6.28); ctx.stroke();
+    }
+    // pips
+    const need = id==='tempo'? 6 : 3;
+    for(let i=0;i<need;i++){
+      ctx.fillStyle = i < TRAIN.pips? '#9fd66a' : 'rgba(232,220,200,.25)';
+      ctx.beginPath(); ctx.arc(W/2 + (i-(need-1)/2)*46*DPR, H*.62, 11*DPR, 0, 6.28); ctx.fill();
+    }
+    if(id==='accent' && G.batonHand){
+      const st = HS_pool[0];
+      const bx=W*.15, bw=W*.7, by=H*.72;
+      ctx.fillStyle='rgba(232,220,200,.15)'; ctx.fillRect(bx,by,bw,10*DPR);
+      const v = Math.min(1.4, st.vyS/ (CAL.start*2));
+      ctx.fillStyle = st.vyS > CAL.start? '#9fd66a' : '#f4c960';
+      ctx.fillRect(bx,by,bw*Math.min(1,v),10*DPR);
+      const ax = bx + bw*Math.min(1, .85);   // accent threshold marker at 85% of bar
+      ctx.strokeStyle='rgba(255,154,86,.95)'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(ax, by-8*DPR); ctx.lineTo(ax, by+18*DPR); ctx.stroke();
+      ctx.fillStyle='#b89b6a'; ctx.font=`${Math.round(11*DPR)}px monospace`;
+      ctx.fillText('SNAP past the orange bar', W/2, by+34*DPR);
+    }
+    ctx.fillStyle='#8d7a5c'; ctx.font=`${Math.round(12*DPR)}px monospace`;
+    ctx.fillText(id==='tempo'? 'stroke DOWN as the ring closes · ESC = menu' : 'on-beat AND strong = ACCENT', W/2, H*.84);
+  }
+  if(id==='cue'){
+    SECTIONS.forEach((sec, i)=>{
+      const lit = i === TRAIN.cueIdx;
+      const x = W*sec.x, y = H*.48;
+      ctx.globalAlpha = lit? 1 : .3;
+      ctx.strokeStyle = sec.col; ctx.lineWidth = lit? 4 : 2;
+      ctx.strokeRect(x-46*DPR, y-24*DPR, 92*DPR, 48*DPR);
+      ctx.fillStyle = sec.col; ctx.font=`bold ${Math.round(11*DPR)}px monospace`;
+      ctx.fillText(sec.name, x, y+4*DPR);
+      if(lit){
+        ctx.globalAlpha = .5 + .5*Math.sin(s*8);
+        ctx.font=`${Math.round(13*DPR)}px monospace`;
+        ctx.fillText('◀ POINT HERE ▶', x, y-40*DPR);
+        if(TRAIN.dwell > 0){ ctx.globalAlpha=1; ctx.strokeStyle='#9fd66a'; ctx.lineWidth=5;
+          ctx.beginPath(); ctx.arc(x, y+44*DPR, 12*DPR, -1.57, -1.57 + 6.28*Math.min(1,TRAIN.dwell/.3)); ctx.stroke(); }
+      }
+      ctx.globalAlpha = 1;
+    });
+    for(let i=0;i<4;i++){ ctx.fillStyle = i<TRAIN.cueIdx? '#9fd66a' : 'rgba(232,220,200,.25)';
+      ctx.beginPath(); ctx.arc(W/2 + (i-1.5)*46*DPR, H*.68, 10*DPR, 0, 6.28); ctx.fill(); }
+    if(TRAIN.aim){
+      ctx.strokeStyle = TRAIN.aim.on? '#9fd66a' : 'rgba(126,200,180,.9)'; ctx.lineWidth = 2;
+      const ax = TRAIN.aim.x, ay = TRAIN.aim.y, r = 14*DPR;
+      ctx.beginPath(); ctx.moveTo(ax-r,ay); ctx.lineTo(ax+r,ay); ctx.moveTo(ax,ay-r); ctx.lineTo(ax,ay+r); ctx.stroke();
+      ctx.fillStyle = TRAIN.aim.on? '#9fd66a' : 'rgba(126,200,180,.9)';
+      ctx.font=`${Math.round(11*DPR)}px monospace`;
+      ctx.fillText(TRAIN.aim.on? 'AIM ✓' : 'AIM', ax, ay - r - 6*DPR);
+    }
+    ctx.fillStyle='#8d7a5c'; ctx.font=`${Math.round(12*DPR)}px monospace`;
+    ctx.fillText('LEFT hand · index finger extended, aimed at the box', W/2, H*.84);
+  }
+  if(id==='fermata'){
+    const F = TRAIN.ferm;
+    if(F.phase===1){
+      ctx.strokeStyle='rgba(255,217,112,.9)'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.arc(W/2, H*.42, (66+5*Math.sin(s*6))*DPR, 0, 6.28); ctx.stroke();
+      ctx.fillStyle='#ffd970'; ctx.font=`bold ${Math.round(14*DPR)}px monospace`;
+      ctx.fillText('HOLD OPEN PALM', W/2, H*.42-90*DPR);
+      ctx.fillStyle='rgba(232,220,200,.15)'; ctx.fillRect(W*.3, H*.58, W*.4, 10*DPR);
+      ctx.fillStyle='#9fd66a'; ctx.fillRect(W*.3, H*.58, W*.4*Math.min(1, F.openFrac/1.0), 10*DPR);
+    }
+    if(F.phase===2){
+      const rd = F.relT - s;
+      if(rd > -.3 && rd < .8){
+        const prog = Math.max(0, rd/.8);
+        ctx.strokeStyle = rd>0? 'rgba(255,217,112,.95)':'rgba(208,86,86,.95)'; ctx.lineWidth=5;
+        ctx.beginPath(); ctx.arc(W/2, H*.42, (26+60*prog)*DPR, 0, 6.28); ctx.stroke();
+        ctx.fillStyle='#ffd970'; ctx.font=`bold ${Math.round(14*DPR)}px monospace`;
+        ctx.fillText('DROP + FIST!', W/2, H*.42+120*DPR);
+      }
+    }
+    ctx.fillStyle='#8d7a5c'; ctx.font=`${Math.round(12*DPR)}px monospace`;
+    ctx.fillText('palm open through the chord · fist exactly on the closing ring · repeats until you pass', W/2, H*.84);
+  }
+  if(id==='dynamics'){
+    const dH=H*.34, dY=H*.30, dX=W*.5-6*DPR;
+    ctx.fillStyle='rgba(232,220,200,.12)'; ctx.fillRect(dX, dY, 12*DPR, dH);
+    ctx.fillStyle='#7ec8b4'; ctx.fillRect(dX, dY + dH*(1-TRAIN.dynV), 12*DPR, dH*TRAIN.dynV);
+    ctx.fillStyle='#f4c960'; ctx.font=`bold ${Math.round(26*DPR)}px monospace`;
+    ctx.fillText(['pp','p','mf','f','ff'][Math.min(4, Math.floor(TRAIN.dynV*5))], W/2, H*.24);
+    const D = TRAIN.dyn;
+    ctx.fillStyle = D.stage==='ff'? '#ffd970' : '#7ec8b4'; ctx.font=`${Math.round(14*DPR)}px monospace`;
+    ctx.fillText(D.stage==='ff'? 'RAISE — forte (hold)' : 'LOWER — piano (hold)', W/2, H*.70);
+    ctx.fillStyle='rgba(232,220,200,.15)'; ctx.fillRect(W*.3, H*.74, W*.4, 10*DPR);
+    ctx.fillStyle='#9fd66a'; ctx.fillRect(W*.3, H*.74, W*.4*Math.min(1, D.hold/1), 10*DPR);
+    ctx.fillStyle='#8d7a5c'; ctx.font=`${Math.round(12*DPR)}px monospace`;
+    ctx.fillText('LEFT palm height = volume', W/2, H*.84);
+  }
+  if(TRAIN.phase==='passed'){
+    ctx.fillStyle='rgba(4,2,6,.55)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#9fd66a'; ctx.font=`${Math.round(34*DPR)}px Georgia`;
+    ctx.fillText('PASS ✓', W/2, H*.5);
+  }
+  if(TRAIN.phase==='complete'){
+    ctx.fillStyle='rgba(4,2,6,.85)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#f4c960'; ctx.font=`${Math.round(28*DPR)}px Georgia`;
+    ctx.fillText('MASTER CLASS COMPLETE', W/2, H*.42);
+    ctx.fillStyle='#b89b6a'; ctx.font=`${Math.round(14*DPR)}px Georgia`;
+    ctx.fillText('All five techniques learned. Tap anywhere to return to the podium.', W/2, H*.52);
+  }
+}
+
+/* ───────────────────────── calibration suite — every gesture ───────────────────────── */
+const CAL_STAGES = [
+  { id:'swing',  need:8, title:'SWING',      desc:'Conduct your natural downstrokes — the game tunes itself to YOU', live:c=>`live velocity ${c.vyS.toFixed(2)}/s · trigger ${CAL.start.toFixed(2)}/s` },
+  { id:'snap',   need:3, title:'SNAP',       desc:'Now 3 STRONG accents — snap your wrist',                       live:c=>`peak ${c.vyS.toFixed(2)}/s · accent bar x${(LEARN.accentX||1.7).toFixed(2)}` },
+  { id:'open',   need:1, title:'OPEN PALM',  desc:'Hold ALL fingers spread open — 1 second',                       live:c=>`openness ${c.openV.toFixed(2)}` },
+  { id:'fist',   need:1, title:'FIST',       desc:'Hold a closed FIST — 1 second',                                  live:c=>`openness ${c.openV.toFixed(2)}` },
+  { id:'forte',  need:1, title:'FORTE',      desc:'Hold your expression palm HIGH — your natural ff',               live:c=>`palm height ${(c.palmY||0).toFixed(2)}` },
+  { id:'piano',  need:1, title:'PIANO',      desc:'Hold your expression palm LOW — your natural pp',               live:c=>`palm height ${(c.palmY||0).toFixed(2)}` },
+];
+document.getElementById('calBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('calBtn'); btn.disabled = true;
+  const warn = document.getElementById('warn');
+  warn.style.display='block'; warn.textContent='Starting camera…';
+  document.getElementById('overlay').style.display='none';
+  state = 3; // STATE.CAL — screen shows stage progress live
+  CALIB = { stage:0, n:0, peaks:[], vyS:0, phase:'armed', lastCY:null, lastCT:0, peak:0, openV:0, palmY:null,
+            hold:0, openMax:0, openMin:1, yMin:1, yMax:0, done:false, lastSeen:0 };
+  if(!landmarker && !hworker){
+    const ok = await initHand();
+    if(!ok){ flash('NO CAMERA — TAP MODE STILL WORKS', '#e06040'); }
+  }
+  runCalLoop();
+});
+
+function calStageAdvance(){
+  const c = CALIB;
+  if(c.stage >= CAL_STAGES.length){            // all done — persist everything
+    CAL.openHi = Math.max(.3, c.openMax*.92);   // measured open-palm openness (8% margin)
+    CAL.openLo = Math.min(.5, c.openMin*1.2);   // measured fist openness (+ margin)
+    try{ localStorage.setItem('maestro_cal', JSON.stringify(CAL)); }catch(e){}
+    if(c.yMin < c.yMax) { LEARN.dynHi = c.yMin; LEARN.dynLo = c.yMax; saveLearn(); }
+    c.done = true;
+    return;
+  }
+  const st = CAL_STAGES[c.stage];
+  if(st.id==='swing'){                         // tune: 55% of slowest stroke, floor 0.18
+    const sorted=[...c.peaks].sort((a,b)=>a-b);
+    CAL = Object.assign({}, CAL, { start: Math.max(.18, +(sorted[0]*.55).toFixed(2)) });
+    try{ localStorage.setItem('maestro_cal', JSON.stringify(CAL)); }catch(e){}
+  }
+  if(st.id==='snap'){
+    LEARN.accentX = Math.min(2.2, Math.max(1.35, +(c.snapAvg/((CAL.start)/1)).toFixed(2)));
+    saveLearn();
+  }
+  c.stage++; c.n = 0; c.hold = 0; c.openMax = 0; c.openMin = 1; c.yMin = 1; c.yMax = 0;
+  c.phase = 'armed'; c.lastCY = null; c.vyS = 0;
+  flash(st.title + ' ✓', '#9fd66a');
+}
+
+function runCalLoop(){
+  const loopFrame = ()=>{
+    if(state !== 3) return;
+    if((hworker || landmarker) && video && video.readyState>=2){
+      const now = performance.now();
+      if(now - lastT > 30){
+        lastT = now;
+        let res = null;
+        if(hworker){
+          if(latestHands && latestHands.t !== calLastT){ calLastT = latestHands.t; res = latestHands; }
+        } else { try{ res = landmarker.detectForVideo(video, now); }catch(e){} }
+        DBG.det = DBG.det || { y:0, n:0 };
+        if(res && res.landmarks && res.landmarks.length){ DBG.det.y++;
+          handPts = res.landmarks[0];
+          const cy = (handPts[0].y + handPts[5].y + handPts[17].y)/3;
+          const c = CALIB;
+          const st = CAL_STAGES[Math.min(c.stage, CAL_STAGES.length-1)];
+          if(st.id==='swing' || st.id==='snap'){
+            if(c.lastCY !== null){
+              const dt = Math.max(1, now - c.lastCT);
+              const vy = (cy - c.lastCY)/dt*1000;
+              const a = 1 - Math.exp(-dt/80);     // rate-independent smoothing
+              c.vyS = c.vyS*(1-a) + vy*a;
+              c.peak = Math.max(c.peak, c.vyS);
+              c.lastSeen = now;
+              if(st.id==='swing'){
+                if(c.phase==='armed' && c.vyS > .18){ c.phase='down'; }
+                else if(c.phase==='down' && c.vyS < CAL.bottom){
+                  c.phase='armed';
+                  c.peaks.push(c.peak); c.peak=0; c.n++;
+                  if(c.n >= st.need) calStageAdvance();
+                }
+              } else {                                    // snap: count peaks above CAL.start
+                if(c.phase==='armed' && c.vyS > CAL.start){ c.phase='down'; c.snapN=(c.snapN||0)+1; c.snapSum=(c.snapSum||0)+c.vyS; }
+                else if(c.phase==='down' && c.vyS < CAL.bottom){
+                  c.phase='armed'; c.n++;
+                  if(c.n >= st.need){ c.snapAvg = c.snapSum/c.snapN; calStageAdvance(); }
+                }
+              }
+            }
+          } else {                                       // hold-based stages: open/fist/forte/piano
+            c.openV = openness(handPts);
+            c.palmY = cy;
+            c.openMax = Math.max(c.openMax, c.openV); c.openMin = Math.min(c.openMin, c.openV);
+            c.yMin = Math.min(c.yMin, cy); c.yMax = Math.max(c.yMax, cy);
+            c.lastSeen = now;
+            const ok = st.id==='open'? c.openV > .55 : st.id==='fist'? c.openV < .45 : true;
+            if(ok){ c.hold += .033; if(c.hold >= 1.0){ c.n = st.need; calStageAdvance(); } }
+            else c.hold = Math.max(0, c.hold - .02);
+          }
+          c.lastCY = cy; c.lastCT = now;
+        } else { DBG.det.n++; }
+      }
+    }
+    requestAnimationFrame(loop);
+  };
+  const loop = ()=>{ try{ loopFrame(); }catch(e){ dlog('⚠ LOOP EXCEPTION — ' + String(e && e.message || e).slice(0,90) + ' — survived'); requestAnimationFrame(loop); } };
+  requestAnimationFrame(loop);
+}
+
+function drawCal(t){
+  const c = CALIB; if(!c) return;
+  ctx.fillStyle='rgba(4,2,6,.92)'; ctx.fillRect(0,0,W,H);
+  if(video && video.readyState>=2){
+    ctx.save(); ctx.globalAlpha=.35; ctx.translate(W,0); ctx.scale(-1,1);
+    const vw=video.videoWidth, vh=video.videoHeight, s=Math.max(W/vw,H/vh);
+    ctx.drawImage(video,(W-vw*s)/2,(H-vh*s)/2,vw*s,vh*s); ctx.restore();
+  }
+  if(handPts.length){
+    for(const [a2,b2] of HAND_CONNECTIONS){
+      const p=handPts[a2], q=handPts[b2];
+      ctx.strokeStyle='rgba(159,214,106,.9)'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo((1-p.x)*W,p.y*H); ctx.lineTo((1-q.x)*W,q.y*H); ctx.stroke();
+    }
+  }
+  // velocity meter: horizontal bar, right = downward
+  const bx=W*.1, bw=W*.8, by=H*.78, meter = Math.max(-1.2, Math.min(2, c.vyS));
+  ctx.fillStyle='rgba(232,220,200,.15)'; ctx.fillRect(bx,by,bw,10);
+  const zero = bx+bw*.375;
+  const px = zero + (meter/2)*(bw*.625);
+  ctx.fillStyle = c.vyS>CAL.start? '#9fd66a' : '#f4c960';
+  ctx.fillRect(Math.min(zero,px),by,Math.abs(px-zero),10);
+  ctx.strokeStyle='rgba(244,201,96,.9)'; ctx.lineWidth=2;
+  const cx0 = bx+CAL.start/2*bw*.625+bw*.375;
+  ctx.beginPath(); ctx.moveTo(cx0, by-6); ctx.lineTo(cx0, by+16); ctx.stroke();
+  // hold progress bar (open/fist/forte/piano stages)
+  const st = CAL_STAGES[Math.min(c.stage, CAL_STAGES.length-1)];
+  if(!c.done && ['open','fist','forte','piano'].includes(st.id)){
+    ctx.fillStyle='rgba(159,214,106,.85)';
+    ctx.fillRect(W*.3, H*.70, W*.4*Math.min(1, c.hold), 8);
+  }
+  // diagnostics checklist (always visible — pinpoints the failure)
+  ctx.textAlign='left'; ctx.font=`${Math.round(12*DPR)}px monospace`;
+  let sy = H*.30;
+  const stagD = DBG.stages || {};
+  for(const [k,v] of [ ['WASM', stagD.wasm], ['MODEL', stagD.model], ['CAMERA', stagD.camera] ]){
+    const good = String(v).startsWith('OK');
+    ctx.fillStyle = v===undefined? '#666' : good? '#9fd66a' : (String(v)==='…'? '#f4c960' : '#e06040');
+    ctx.fillText(k.padEnd(7,' ') + (v || '—'), W*.06, sy); sy += H*.045;
+  }
+  const d = DBG.det || {y:0,n:0};
+  ctx.fillStyle = d.y===0 && d.n>20 ? '#e06040' : '#b89b6a';
+  ctx.fillText('FRAMES  hand:' + d.y + ' empty:' + d.n, W*.06, sy); sy += H*.045;
+  ctx.fillStyle = '#e06040';
+  ctx.fillText((DBG.err||'').slice(0,60), W*.06, sy);
+  // stage checklist right side
+  ctx.textAlign='right'; ctx.font=`${Math.round(12*DPR)}px monospace`;
+  CAL_STAGES.forEach((sg, i)=>{
+    ctx.fillStyle = c.done || i < c.stage? '#9fd66a' : i===c.stage? '#f4c960' : '#666';
+    ctx.fillText((i < c.stage || c.done? '✓ ':'· ') + sg.title, W*.94, H*(.30 + .045*i));
+  });
+  // pips
+  const need = c.done? 0 : st.need;
+  for(let i=0;i<Math.max(need, (c.stage===0? 8:need));i++){
+    ctx.fillStyle = i < c.n? '#9fd66a' : 'rgba(232,220,200,.25)';
+    ctx.beginPath(); ctx.arc(W/2 + (i-(Math.max(need,8)-1)/2)*46, H*.14, 11, 0, 6.28); ctx.fill();
+  }
+  ctx.textAlign='center'; ctx.fillStyle='#e8dcc8';
+  ctx.font=`${Math.round(22*DPR)}px Georgia`;
+  if(!c.done){
+    ctx.fillText(`${st.title}${st.need>1? ' — ' + (st.need - c.n) + ' MORE' : ''}`, W/2, H*.08);
+    ctx.font=`${Math.round(14*DPR)}px Georgia`; ctx.fillStyle='#b89b6a';
+    ctx.fillText(st.desc, W/2, H*.68);
+    ctx.fillText(st.live(c), W/2, H*.86);
+  }else if(!landmarker && !hworker && String(DBG.stages.model||'').startsWith('warming')){
+    ctx.fillStyle='#f4c960';
+    ctx.font=`${Math.round(20*DPR)}px Georgia`;
+    ctx.fillText('MODEL WARMING — 5-25s phones, up to 60s laptops', W/2, H*.08);
+  }else if(performance.now() - (c.lastSeen||0) > 2000){
+    ctx.fillStyle='#e06040';
+    ctx.font=`${Math.round(20*DPR)}px Georgia`;
+    ctx.fillText('NO HAND SEEN', W/2, H*.08);
+    ctx.font=`${Math.round(14*DPR)}px Georgia`; ctx.fillStyle='#b89b6a';
+    ctx.fillText('hold your hand where the camera can see it', W/2, H*.68);
+  }else{
+    ctx.fillStyle='#9fd66a';
+    ctx.font=`${Math.round(24*DPR)}px Georgia`;
+    ctx.fillText('TUNED ✓ — THE GAME MEASURES YOU', W/2, H*.08);
+    ctx.font=`${Math.round(14*DPR)}px Georgia`; ctx.fillStyle='#b89b6a';
+    ctx.fillText(`swing ${CAL.start.toFixed(2)}/s · accent x${(LEARN.accentX||1.7).toFixed(2)} · open ${CAL.openHi?CAL.openHi.toFixed(2):'—'} · fist ${CAL.openLo?CAL.openLo.toFixed(2):'—'} · ff/pp ${LEARN.dynHi!=null? LEARN.dynHi.toFixed(2)+'/'+LEARN.dynLo.toFixed(2) : '—'}`, W/2, H*.68);
+    ctx.fillStyle='#f4c960';
+    ctx.fillText('tap anywhere to return to the menu', W/2, H*.86);
+  }
+}
+
+function runHandLoop(){
+  // velocity state machine: armed -> down (fast downstroke detected) -> fire ictus
+  // at the BOTTOM of the stroke (velocity collapses/reverses), then re-arm.
+  // Thresholds from CAL (calibrated) in normalized units/sec.
+  const HS = HS_pool;
+  const loopFrame = ()=>{
+    if(state!==STATE.PLAY || hworker) return;   // worker pump owns tracking once ready
+    if(landmarker && video && video.readyState>=2){
+      const now = performance.now();
+      if(now - lastT > (DBG.cad || 60)){
+        lastT = now;
+        let res = null;
+        const t0 = performance.now();
+        try { res = landmarker.detectForVideo(video, t0); }
+        catch(e){ DBG.err = String(e).slice(0,120); }
+        const inf = performance.now() - t0;                 // inference ms this frame
+        DBG.inf = Math.round(DBG.inf ? DBG.inf*.8 + inf*.2 : inf);
+        DBG.cad = Math.min(250, Math.max(70, (DBG.inf||0) * 2.2));   // ADAPTIVE: a 150ms detect waits ~330ms — the UI thread must never saturate
+        ingestLandmarks(res && res.landmarks, now, res && res.handedness && res.handedness.map(h=>h&&h[0]?h[0].categoryName:''));
+      }
+    }
+    requestAnimationFrame(loop);
+  };
+  const loop = ()=>{ try{ loopFrame(); }catch(e){ dlog('⚠ LOOP EXCEPTION — ' + String(e && e.message || e).slice(0,90) + ' — survived'); requestAnimationFrame(loop); } };
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(draw);
+(function(){
+  const tp = document.getElementById('trainProg');
+  const nd = (TRAINDONE||[]).filter(Boolean).length;
+  if(nd > 0){ tp.style.display = 'block'; tp.textContent = 'Master class: ' + nd + '/5' + (nd===5? ' ✓ COMPLETE' : ''); }
+  const ll = document.getElementById('learnLine');
+  if(LEARN.sessions > 0 || LEARN.tBias){
+    ll.style.display = 'block';
+    ll.textContent = 'adaptive · bias ' + Math.round(LEARN.tBias*1000) + 'ms · window x' + (LEARN.ramp||1).toFixed(2) + ' · accent x' + (LEARN.accentX||1.7).toFixed(2) + (LEARN.acc!=null? ' · acc ' + LEARN.acc + '%' : '');
+  }
+})();
+</script>
+</body>
+</html>
